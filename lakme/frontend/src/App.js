@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Navbar from './components/Navbar';
 import Chatbot from './components/Chatbot';
+import AIAssistantSection from './components/AIAssistantSection';
 import Home from './pages/Home';
 import Services from './pages/Services';
 import Booking from './pages/Booking';
@@ -25,11 +26,12 @@ const AdminRoute = ({ children }) => {
 };
 
 function AppContent() {
+  const [openChatbot, setOpenChatbot] = useState(false);
   return (
     <BrowserRouter>
       <Navbar />
       <Routes>
-        <Route path="/" element={<Home />} />
+        <Route path="/" element={<Home onOpenChat={() => setOpenChatbot(true)} />} />
         <Route path="/services" element={<Services />} />
         <Route path="/booking" element={<Booking />} />
         <Route path="/hairstyle" element={<Hairstyle />} />
@@ -41,7 +43,10 @@ function AppContent() {
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
 
-      <Chatbot />
+      <Chatbot
+  externalOpen={openChatbot}
+  onExternalOpenHandled={() => setOpenChatbot(false)}
+/>
 
       {/* ── Floating WhatsApp (right) ── */}
       <a

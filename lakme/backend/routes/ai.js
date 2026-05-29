@@ -503,4 +503,19 @@ router.post('/quick-book', protect, async (req, res) => {
   }
 });
 
+router.post('/voice-chat', async (req, res) => {
+  try {
+    const completion = await groq.chat.completions.create({
+      messages: req.body.messages,
+      model: 'llama-3.3-70b-versatile',
+      max_tokens: 200,
+      temperature: 0.7,
+    });
+    res.json(completion);
+  } catch (err) {
+    console.error('Voice chat error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

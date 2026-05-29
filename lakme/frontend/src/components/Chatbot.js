@@ -3,8 +3,15 @@ import { MessageCircle, X, Send, ArrowRight, Upload, Image as ImageIcon, Sparkle
 import { Link, useNavigate } from 'react-router-dom';
 import API from '../utils/api';
 
-export default function Chatbot() {
+export default function Chatbot({ externalOpen, onExternalOpenHandled }) {
   const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (externalOpen) {
+      setOpen(true);
+      onExternalOpenHandled?.();
+    }
+  }, [externalOpen]);
   const [messages, setMessages] = useState([
     { 
       from: 'bot', 

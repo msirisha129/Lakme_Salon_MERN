@@ -1,0 +1,650 @@
+// AIAssistantSection.js — Lakmé Salon AI Assistant Section
+import React from 'react';
+// Uses Groq API (FREE — no credit card) + browser Web Speech API (free)
+// Get your free key at https://console.groq.com → set window.GROQ_KEY = "gsk_..."
+// Usage: React.createElement(AIAssistantSection, { onOpenChat: openHairAIChat })
+
+// ─── Voice Assistant Modal ────────────────────────────────────────────────────
+function VoiceAssistantModal({ onClose }) {
+  const [phase, setPhase] = React.useState('idle'); // idle | speaking | listening | thinking
+  const [transcript, setTranscript] = React.useState('');
+  const [messages, setMessages] = React.useState([]);
+  const [statusText, setStatusText] = React.useState('Click the mic to start');
+  const synthRef = React.useRef(window.speechSynthesis);
+  const recognitionRef = React.useRef(null);
+  const messagesEndRef = React.useRef(null);
+
+  const SALON_SYSTEM = `You are Lakme Salon's elegant voice assistant. You speak warmly and concisely — 2-3 sentences max per reply since responses are read aloud. You help customers with:
+- Services: Hair Cut & Styling, Colour, Highlights/Balayage, Hair Spa, Bridal Makeup, Party Makeup, Facial, Manicure, Pedicure, Waxing, Threading
+- Booking appointments
+- Pricing enquiries
+- General salon info
+Always sound premium, warm, and professional. Sign off sentences naturally. If asked to book, collect their name, service, and preferred time.`;
+
+ React.useEffect(() => {
+    var timer = setTimeout(() => greetUser(), 600);
+    return () => clearTimeout(timer);
+    return () => {
+      synthRef.current && synthRef.current.cancel();
+      recognitionRef.current && recognitionRef.current.abort();
+    };
+  }, []);
+
+  React.useEffect(() => {
+    messagesEndRef.current && messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  function greetUser() {
+    var greeting = "Hello! Welcome to Lakmé Salon. I'm your personal beauty assistant. How can I help you today? Feel free to ask about our services, pricing, or book an appointment!";
+    addMessage('assistant', greeting);
+    speak(greeting);
+  }
+
+  function addMessage(role, text) {
+    setMessages(function(prev) {
+      return prev.concat([{ role: role, text: text, id: Date.now() + Math.random() }]);
+    });
+  }
+
+  function speak(text) {
+    synthRef.current && synthRef.current.cancel();
+    setPhase('speaking');
+    setStatusText('Speaking…');
+    var clean = text.replace(/[^\x00-\x7F]/g, '');
+    var utt = new SpeechSynthesisUtterance(clean);
+    utt.rate = 0.92;
+    utt.pitch = 1.08;
+    var voices = (synthRef.current && synthRef.current.getVoices()) || [];
+    var v = voices.find(function(v) { return v.lang.startsWith('en') && /female|samantha|zira|google uk/i.test(v.name); })
+          || voices.find(function(v) { return v.lang.startsWith('en'); })
+          || null;
+    if (v) utt.voice = v;
+    utt.onend = function() { 
+  setPhase('idle'); 
+  setStatusText('Listening again…');
+  setTimeout(function() { startListening(); }, 800);
+};
+    utt.onerror = function() { setPhase('idle'); setStatusText('Click the mic to speak'); };
+    synthRef.current && synthRef.current.speak(utt);
+  }
+
+  async function askGroq(userText) {
+    setPhase('thinking');
+    setStatusText('Thinking…');
+    try {
+      var res = await fetch('/api/ai/voice-chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          
+        },
+        body: JSON.stringify({
+          model: 'llama3-8b-8192',
+          max_tokens: 200,
+          temperature: 0.7,
+          messages: [{ role: 'system', content: SALON_SYSTEM }].concat(
+            messages.slice(-8).map(function(m) { return { role: m.role, content: m.text }; }),
+            [{ role: 'user', content: userText }]
+          )
+        })
+      });
+      var data = await res.json();
+      var reply = (data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content)
+        || "I'm sorry, I couldn't understand that. Please try again!";
+      addMessage('assistant', reply);
+      speak(reply);
+    } catch (e) {
+      var fallback = "I'm having a little trouble connecting right now. Please call us or use our chat — we're happy to help!";
+      addMessage('assistant', fallback);
+      speak(fallback);
+    }
+  }
+
+  function startListening() {
+    var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { setStatusText('Voice not supported — please use Message AI instead'); return; }
+    synthRef.current && synthRef.current.cancel();
+    var r = new SR();
+    r.lang = 'en-IN';
+    r.continuous = false;
+    r.interimResults = true;
+    r.onstart = function() { setPhase('listening'); setStatusText('Listening… speak now'); };
+    r.onresult = function(e) {
+      var t = '';
+      for (var i = e.resultIndex; i < e.results.length; i++) t += e.results[i][0].transcript;
+      setTranscript(t);
+      if (e.results[e.results.length - 1].isFinal) {
+        r.stop();
+        setTranscript('');
+        addMessage('user', t);
+        askGroq(t);
+      }
+    };
+    r.onerror = function() { setPhase('idle'); setStatusText('Could not hear you — try again'); };
+    r.onend = function() { setPhase(function(p) { return p === 'listening' ? 'idle' : p; }); setStatusText('Click the mic to speak'); };
+    recognitionRef.current = r;
+    r.start();
+  }
+
+  function stopListening() {
+    recognitionRef.current && recognitionRef.current.stop();
+    setPhase('idle');
+    setStatusText('Click the mic to speak');
+  }
+
+  function micClick() {
+    if (phase === 'listening') stopListening();
+    else if (phase === 'idle') startListening();
+  }
+
+  var disabled = phase === 'speaking' || phase === 'thinking';
+
+  return React.createElement(
+    'div',
+    { style: styles.modalBackdrop, onClick: function(e) { if (e.target === e.currentTarget) onClose(); } },
+    React.createElement(
+      'div',
+      { style: styles.voiceModal },
+      // Header
+      React.createElement(
+        'div',
+        { style: styles.vmHeader },
+        React.createElement('div', { style: styles.vmLogo }, React.createElement('span', { style: { fontSize: 20 } }, '🎙')),
+        React.createElement(
+          'div',
+          null,
+          React.createElement('div', { style: styles.vmTitle }, 'Voice Assistant'),
+          React.createElement('div', { style: styles.vmSub }, 'Lakmé Salon · AI Powered')
+        ),
+        React.createElement('button', { onClick: onClose, style: styles.vmClose }, '✕')
+      ),
+      // Messages
+      React.createElement(
+        'div',
+        { style: styles.vmMessages },
+        messages.map(function(m) {
+          return React.createElement(
+            'div',
+            {
+              key: m.id,
+              style: Object.assign({}, styles.vmBubble, m.role === 'user' ? styles.vmBubbleUser : styles.vmBubbleBot)
+            },
+            m.text
+          );
+        }),
+        transcript
+          ? React.createElement('div', { style: Object.assign({}, styles.vmBubble, styles.vmBubbleUser, { opacity: 0.6 }) }, transcript + '…')
+          : null,
+        React.createElement('div', { ref: messagesEndRef })
+      ),
+      // Mic Area
+      React.createElement(
+        'div',
+        { style: styles.vmMicArea },
+        React.createElement('div', { style: styles.vmStatusText }, statusText),
+        React.createElement(
+          'div',
+          { style: styles.vmRingWrap },
+          (phase === 'listening' || phase === 'speaking')
+            ? React.createElement(
+                React.Fragment,
+                null,
+                React.createElement('div', { style: Object.assign({}, styles.vmRing, { animationDuration: '1.2s' }) }),
+                React.createElement('div', { style: Object.assign({}, styles.vmRing, { animationDuration: '1.6s', animationDelay: '0.3s' }) })
+              )
+            : null,
+          React.createElement(
+            'button',
+            {
+              onClick: micClick,
+              disabled: disabled,
+              style: Object.assign({}, styles.vmMicBtn, {
+                background: phase === 'listening' ? '#c9a84c' : 'linear-gradient(135deg, #c9a84c, #a07830)',
+                cursor: disabled ? 'not-allowed' : 'pointer',
+                opacity: disabled ? 0.7 : 1,
+              }),
+              'aria-label': phase === 'listening' ? 'Stop listening' : 'Start speaking'
+            },
+            phase === 'thinking'
+              ? React.createElement('span', { style: { fontSize: 24 } }, '⋯')
+              : phase === 'listening'
+              ? React.createElement(
+                  'svg',
+                  { width: 28, height: 28, fill: 'white', viewBox: '0 0 24 24' },
+                  React.createElement('rect', { x: 6, y: 4, width: 4, height: 16, rx: 2 }),
+                  React.createElement('rect', { x: 14, y: 4, width: 4, height: 16, rx: 2 })
+                )
+              : React.createElement(
+                  'svg',
+                  { width: 28, height: 28, fill: 'white', viewBox: '0 0 24 24' },
+                  React.createElement('path', { d: 'M12 15c1.66 0 3-1.34 3-3V6c0-1.66-1.34-3-3-3S9 4.34 9 6v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V6zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-2.08c3.39-.49 6-3.39 6-6.92h-2z' })
+                )
+          )
+        ),
+        React.createElement(
+          'div',
+          { style: styles.vmHint },
+          phase === 'speaking' ? '🔊 Speaking…'
+            : phase === 'thinking' ? '✨ Thinking…'
+            : phase === 'listening' ? '🎙 Listening…'
+            : 'Tap mic and ask anything'
+        )
+      )
+    ),
+    React.createElement('style', null, `
+      @keyframes lva-ring-pulse {
+        0% { transform: scale(1); opacity: 0.6; }
+        100% { transform: scale(2.2); opacity: 0; }
+      }
+    `)
+  );
+}
+
+// ─── Main Section Component ───────────────────────────────────────────────────
+function AIAssistantSection({ onOpenChat }) {
+  var _voice = React.useState(false);
+  var voiceOpen = _voice[0], setVoiceOpen = _voice[1];
+  var _hv = React.useState(false);
+  var hoverVoice = _hv[0], setHoverVoice = _hv[1];
+  var _hm = React.useState(false);
+  var hoverMsg = _hm[0], setHoverMsg = _hm[1];
+
+  return React.createElement(
+    'section',
+    { style: styles.section },
+    // Background decorative layer
+    React.createElement(
+      'div',
+      { style: styles.bgDecor, 'aria-hidden': 'true' },
+      React.createElement('div', { style: styles.bgLine1 }),
+      React.createElement('div', { style: styles.bgLine2 }),
+      React.createElement('div', { style: styles.bgGlow })
+    ),
+    React.createElement(
+      'div',
+      { style: styles.container },
+      // Badge
+      React.createElement(
+        'div',
+        { style: styles.badge },
+        React.createElement('span', { style: styles.badgeDot }),
+        'AI-POWERED ASSISTANTS'
+      ),
+      // Heading
+      React.createElement(
+        'h2',
+        { style: styles.heading },
+        'Your Personal',
+        React.createElement('br'),
+        React.createElement('span', { style: styles.headingGold }, 'Beauty Concierge')
+      ),
+      React.createElement(
+        'p',
+        { style: styles.sub },
+        'Talk to our AI or chat instantly — get answers about services,',
+        React.createElement('br'),
+        'book appointments, and get beauty advice. Available 24/7.'
+      ),
+      // Cards row
+      React.createElement(
+        'div',
+        { style: styles.cardsRow },
+        // Voice Card
+        React.createElement(
+          'div',
+          {
+            style: Object.assign({}, styles.card, hoverVoice ? styles.cardHover : {}),
+            onMouseEnter: function() { setHoverVoice(true); },
+            onMouseLeave: function() { setHoverVoice(false); }
+          },
+          React.createElement(
+            'div',
+            { style: styles.cardIconWrap },
+            React.createElement('div', { style: Object.assign({}, styles.cardIconRing, hoverVoice ? styles.cardIconRingActive : {}) }),
+            React.createElement(
+              'div',
+              { style: styles.cardIcon },
+              React.createElement(
+                'svg',
+                { width: 30, height: 30, fill: '#c9a84c', viewBox: '0 0 24 24' },
+                React.createElement('path', { d: 'M12 15c1.66 0 3-1.34 3-3V6c0-1.66-1.34-3-3-3S9 4.34 9 6v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V6zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-2.08c3.39-.49 6-3.39 6-6.92h-2z' })
+              )
+            )
+          ),
+          React.createElement('div', { style: styles.cardLabel }, 'VOICE ASSISTANT'),
+          React.createElement('div', { style: styles.cardTitle }, 'Speak to Us'),
+          React.createElement('div', { style: styles.cardDesc }, 'Hands-free help. Ask questions, explore services, and get recommendations — all by voice.'),
+          React.createElement(
+            'div',
+            { style: styles.cardFeatures },
+            React.createElement('span', { style: styles.cardFeature }, '🎙 Voice activated'),
+            React.createElement('span', { style: styles.cardFeature }, '🔊 Speaks back to you'),
+            React.createElement('span', { style: styles.cardFeature }, '✨ AI powered')
+          ),
+          React.createElement('button', { onClick: function() { setVoiceOpen(true); }, style: styles.btnGold }, 'Start Voice Assistant →')
+        ),
+        // Or Divider
+        React.createElement(
+          'div',
+          { style: styles.orDivider },
+          React.createElement('div', { style: styles.orLine }),
+          React.createElement('span', { style: styles.orText }, 'or'),
+          React.createElement('div', { style: styles.orLine })
+        ),
+        // Message Card
+        React.createElement(
+          'div',
+          {
+            style: Object.assign({}, styles.card, hoverMsg ? styles.cardHover : {}),
+            onMouseEnter: function() { setHoverMsg(true); },
+            onMouseLeave: function() { setHoverMsg(false); }
+          },
+          React.createElement(
+            'div',
+            { style: styles.cardIconWrap },
+            React.createElement('div', { style: Object.assign({}, styles.cardIconRing, hoverMsg ? styles.cardIconRingActive : {}) }),
+            React.createElement(
+              'div',
+              { style: styles.cardIcon },
+              React.createElement(
+                'svg',
+                { width: 30, height: 30, fill: '#c9a84c', viewBox: '0 0 24 24' },
+                React.createElement('path', { d: 'M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z' })
+              )
+            )
+          ),
+          React.createElement('div', { style: styles.cardLabel }, 'HAIR AI · MESSAGE'),
+          React.createElement('div', { style: styles.cardTitle }, 'Chat with AI'),
+          React.createElement('div', { style: styles.cardDesc }, 'Upload a photo, ask about hairstyles, get styling tips, or book — our Hair AI is ready.'),
+          React.createElement(
+            'div',
+            { style: styles.cardFeatures },
+            React.createElement('span', { style: styles.cardFeature }, '📸 Photo upload'),
+            React.createElement('span', { style: styles.cardFeature }, '💬 Live chat'),
+            React.createElement('span', { style: styles.cardFeature }, '💇 Style advice')
+          ),
+          React.createElement(
+            'button',
+            { onClick: function() { onOpenChat && onOpenChat(); }, style: styles.btnOutline },
+            'Open Hair AI Chat →'
+          )
+        )
+      ),
+      // Bottom note
+      React.createElement('p', { style: styles.bottomNote }, '✦ Both assistants are free to use · No login required · Instant responses')
+    ),
+    // Voice Modal
+    voiceOpen ? React.createElement(VoiceAssistantModal, { onClose: function() { setVoiceOpen(false); } }) : null
+  );
+}
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
+var styles = {
+  section: {
+    position: 'relative',
+    background: '#0a0a0a',
+    padding: '100px 24px',
+    overflow: 'hidden',
+    fontFamily: "'Cormorant Garamond', 'Playfair Display', Georgia, serif",
+  },
+  bgDecor: { position: 'absolute', inset: 0, pointerEvents: 'none' },
+  bgLine1: {
+    position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)',
+    width: 1, height: '100%', background: 'linear-gradient(to bottom, transparent, rgba(201,168,76,0.15), transparent)',
+  },
+  bgLine2: {
+    position: 'absolute', top: '50%', left: 0, transform: 'translateY(-50%)',
+    height: 1, width: '100%', background: 'linear-gradient(to right, transparent, rgba(201,168,76,0.08), transparent)',
+  },
+  bgGlow: {
+    position: 'absolute', top: '30%', left: '50%', transform: 'translate(-50%, -50%)',
+    width: 600, height: 400, borderRadius: '50%',
+    background: 'radial-gradient(ellipse, rgba(201,168,76,0.06) 0%, transparent 70%)',
+  },
+  container: {
+    maxWidth: 960,
+    margin: '0 auto',
+    position: 'relative',
+    textAlign: 'center',
+  },
+  badge: {
+    display: 'inline-flex', alignItems: 'center', gap: 8,
+    fontSize: 11, letterSpacing: '0.2em', color: '#c9a84c',
+    fontFamily: "'Montserrat', 'Arial Narrow', sans-serif",
+    fontWeight: 600, marginBottom: 24,
+  },
+  badgeDot: {
+    width: 6, height: 6, borderRadius: '50%', background: '#c9a84c',
+    boxShadow: '0 0 8px rgba(201,168,76,0.8)',
+    display: 'inline-block',
+    animation: 'pulse 2s infinite',
+  },
+  heading: {
+    fontSize: 'clamp(36px, 5vw, 58px)',
+    fontWeight: 400,
+    color: '#f5f0e8',
+    margin: '0 0 16px',
+    lineHeight: 1.15,
+    letterSpacing: '-0.01em',
+  },
+  headingGold: {
+    color: '#c9a84c',
+    fontStyle: 'italic',
+  },
+  sub: {
+    fontSize: 16,
+    color: '#888',
+    lineHeight: 1.7,
+    marginBottom: 64,
+    fontFamily: "'Montserrat', sans-serif",
+    fontWeight: 300,
+  },
+  cardsRow: {
+    display: 'flex',
+    alignItems: 'stretch',
+    gap: 0,
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+  },
+  card: {
+    flex: '1 1 320px',
+    maxWidth: 380,
+    background: 'rgba(255,255,255,0.03)',
+    border: '1px solid rgba(201,168,76,0.2)',
+    borderRadius: 2,
+    padding: '48px 36px',
+    textAlign: 'left',
+    transition: 'background 0.3s, border-color 0.3s, transform 0.3s',
+    cursor: 'default',
+  },
+  cardHover: {
+    background: 'rgba(201,168,76,0.06)',
+    borderColor: 'rgba(201,168,76,0.5)',
+    transform: 'translateY(-4px)',
+  },
+  cardIconWrap: {
+    position: 'relative',
+    width: 64, height: 64,
+    marginBottom: 28,
+  },
+  cardIconRing: {
+    position: 'absolute', inset: -8,
+    border: '1px solid rgba(201,168,76,0.2)',
+    borderRadius: '50%',
+    transition: 'border-color 0.3s',
+  },
+  cardIconRingActive: {
+    borderColor: 'rgba(201,168,76,0.6)',
+  },
+  cardIcon: {
+    width: 64, height: 64, borderRadius: '50%',
+    background: 'rgba(201,168,76,0.12)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+  },
+  cardLabel: {
+    fontSize: 10, letterSpacing: '0.25em', color: '#c9a84c',
+    fontFamily: "'Montserrat', sans-serif", fontWeight: 700,
+    marginBottom: 8,
+  },
+  cardTitle: {
+    fontSize: 26, fontWeight: 500, color: '#f5f0e8',
+    marginBottom: 14, letterSpacing: '-0.01em',
+  },
+  cardDesc: {
+    fontSize: 14, color: '#777', lineHeight: 1.7,
+    fontFamily: "'Montserrat', sans-serif", fontWeight: 300,
+    marginBottom: 24,
+  },
+  cardFeatures: {
+    display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 32,
+  },
+  cardFeature: {
+    fontSize: 12, color: '#999',
+    fontFamily: "'Montserrat', sans-serif",
+  },
+  btnGold: {
+    width: '100%', padding: '14px 24px',
+    background: 'linear-gradient(135deg, #c9a84c, #a07830)',
+    border: 'none', borderRadius: 1,
+    color: '#0a0a0a', fontSize: 12,
+    fontFamily: "'Montserrat', sans-serif", fontWeight: 700,
+    letterSpacing: '0.1em', cursor: 'pointer',
+    transition: 'opacity 0.2s, transform 0.2s',
+  },
+  btnOutline: {
+    width: '100%', padding: '14px 24px',
+    background: 'transparent',
+    border: '1px solid rgba(201,168,76,0.5)',
+    borderRadius: 1,
+    color: '#c9a84c', fontSize: 12,
+    fontFamily: "'Montserrat', sans-serif", fontWeight: 700,
+    letterSpacing: '0.1em', cursor: 'pointer',
+    transition: 'background 0.2s, border-color 0.2s',
+  },
+  orDivider: {
+    display: 'flex', flexDirection: 'column',
+    alignItems: 'center', justifyContent: 'center',
+    padding: '0 20px', gap: 12, minWidth: 40,
+  },
+  orLine: {
+    width: 1, flex: 1, minHeight: 40,
+    background: 'rgba(201,168,76,0.2)',
+  },
+  orText: {
+    fontSize: 11, color: '#555', letterSpacing: '0.1em',
+    fontFamily: "'Montserrat', sans-serif",
+  },
+  bottomNote: {
+    marginTop: 56,
+    fontSize: 12, color: '#555',
+    fontFamily: "'Montserrat', sans-serif",
+    letterSpacing: '0.05em',
+  },
+
+  // ── Voice Modal ──
+  modalBackdrop: {
+    position: 'fixed', inset: 0,
+    background: 'rgba(0,0,0,0.75)',
+    backdropFilter: 'blur(8px)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    zIndex: 99999,
+    padding: 16,
+  },
+  voiceModal: {
+    background: '#111',
+    border: '1px solid rgba(201,168,76,0.3)',
+    borderRadius: 4,
+    width: '100%', maxWidth: 440,
+    display: 'flex', flexDirection: 'column',
+    maxHeight: '90vh',
+    overflow: 'hidden',
+    boxShadow: '0 32px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(201,168,76,0.1)',
+  },
+  vmHeader: {
+    padding: '20px 24px',
+    borderBottom: '1px solid rgba(201,168,76,0.15)',
+    display: 'flex', alignItems: 'center', gap: 14,
+    background: 'rgba(201,168,76,0.05)',
+  },
+  vmLogo: {
+    width: 44, height: 44, borderRadius: '50%',
+    background: 'rgba(201,168,76,0.15)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    border: '1px solid rgba(201,168,76,0.3)',
+  },
+  vmTitle: {
+    fontSize: 16, fontWeight: 500,
+    color: '#f5f0e8',
+    fontFamily: "'Cormorant Garamond', Georgia, serif",
+    letterSpacing: '0.02em',
+  },
+  vmSub: {
+    fontSize: 11, color: '#c9a84c',
+    fontFamily: "'Montserrat', sans-serif",
+    letterSpacing: '0.1em',
+  },
+  vmClose: {
+    marginLeft: 'auto', background: 'none', border: 'none',
+    color: '#666', cursor: 'pointer', fontSize: 18, padding: 4,
+    transition: 'color 0.2s',
+  },
+  vmMessages: {
+    flex: 1, overflowY: 'auto',
+    padding: 20, display: 'flex', flexDirection: 'column',
+    gap: 10, minHeight: 160,
+  },
+  vmBubble: {
+    maxWidth: '85%', padding: '10px 16px',
+    borderRadius: 2, fontSize: 14, lineHeight: 1.6,
+    fontFamily: "'Montserrat', sans-serif",
+  },
+  vmBubbleBot: {
+    background: 'rgba(201,168,76,0.1)',
+    border: '1px solid rgba(201,168,76,0.2)',
+    color: '#e8e0d0',
+    alignSelf: 'flex-start',
+  },
+  vmBubbleUser: {
+    background: 'rgba(255,255,255,0.06)',
+    color: '#aaa',
+    alignSelf: 'flex-end',
+  },
+  vmMicArea: {
+    padding: '24px 20px 32px',
+    borderTop: '1px solid rgba(255,255,255,0.06)',
+    display: 'flex', flexDirection: 'column',
+    alignItems: 'center', gap: 16,
+    background: 'rgba(0,0,0,0.3)',
+  },
+  vmStatusText: {
+    fontSize: 12, color: '#666',
+    fontFamily: "'Montserrat', sans-serif",
+    letterSpacing: '0.05em',
+  },
+  vmRingWrap: {
+    position: 'relative',
+    width: 80, height: 80,
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+  },
+  vmRing: {
+    position: 'absolute',
+    width: 80, height: 80,
+    borderRadius: '50%',
+    border: '2px solid rgba(201,168,76,0.5)',
+    animation: 'lva-ring-pulse 1.4s ease-out infinite',
+  },
+  vmMicBtn: {
+    position: 'relative', zIndex: 2,
+    width: 72, height: 72, borderRadius: '50%',
+    border: '2px solid rgba(201,168,76,0.4)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    transition: 'transform 0.15s, opacity 0.2s',
+    boxShadow: '0 8px 24px rgba(201,168,76,0.3)',
+  },
+  vmHint: {
+    fontSize: 12, color: '#c9a84c',
+    fontFamily: "'Montserrat', sans-serif",
+    letterSpacing: '0.05em',
+  },
+};
+export default AIAssistantSection;

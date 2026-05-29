@@ -27,13 +27,26 @@ app.use('/api/admin', require('./routes/admin'));
 app.get('/api/health', (req, res) => res.json({ status: 'OK', message: 'Lakme API running' }));
 
 // Connect MongoDB
-mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/lakme_salon')
-  .then(() => {
+const connectDB = async () => {
+  try {
+    await mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/lakme_salon', {
+      serverSelectionTimeoutMS: 10000,
+      socketTimeoutMS: 45000,
+    });
     console.log('✅ MongoDB connected');
-    // Seed data on first run
     require('./middleware/seeder');
-  })
-  .catch(err => console.error('MongoDB error:', err));
+  } catch (err) {
+    console.error('MongoDB error:', err.message);
+    setTimeout(connectDB, 5000); // retry every 5 seconds
+  }
+};
+
+mongoose.connection.on('disconnected', () => {
+  console.log('MongoDB disconnected — retrying...');
+  setTimeout(connectDB, 5000);
+});
+
+connectDB();
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 Lakme API running on port ${PORT}`));

@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
+import AIAssistantSection from '../components/AIAssistantSection';
 import { Link } from 'react-router-dom';
 import { ArrowRight, Star, Sparkles, Award, Clock, Phone, MapPin } from 'lucide-react';
 import API from '../utils/api';
 
-export default function Home() {
+export default function Home({ onOpenChat }) {
   const [services, setServices] = useState([]);
 
   useEffect(() => {
@@ -391,6 +392,8 @@ export default function Home() {
           </div>
         </div>
       </section>
+      {/* ── AI ASSISTANT SECTION ── */}
+<AIAssistantSection onOpenChat={onOpenChat} />
 
       {/* ── CTA (YOUR VERSION — UNTOUCHED) ──────────────────────────────── */}
       <section style={{ background: 'var(--black)', padding: '80px 0', textAlign: 'center' }}>
