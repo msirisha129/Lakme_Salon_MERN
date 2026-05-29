@@ -30,10 +30,13 @@ app.get('/api/health', (req, res) => res.json({ status: 'OK', message: 'Lakme AP
 // Connect MongoDB
 const connectDB = async () => {
   try {
-    await mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/lakme_salon', {
-      serverSelectionTimeoutMS: 10000,
-      socketTimeoutMS: 45000,
-    });
+  await mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/lakme_salon', {
+  serverSelectionTimeoutMS: 30000,
+  socketTimeoutMS: 60000,
+  connectTimeoutMS: 30000,
+  maxPoolSize: 10,
+  retryWrites: true,
+});
     console.log('✅ MongoDB connected');
     require('./middleware/seeder');
   } catch (err) {

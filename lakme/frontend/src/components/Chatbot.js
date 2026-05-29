@@ -25,6 +25,9 @@ export default function Chatbot({ externalOpen, onExternalOpenHandled }) {
   const [showImageUpload, setShowImageUpload] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
+  const [bookingState, setBookingState] = useState(null);
+// null | 'askService' | 'askDate' | 'askTime' | 'confirm'
+  const [bookingData, setBookingData] = useState({});
   
   const bottomRef = useRef();
   const fileInputRef = useRef();
@@ -34,62 +37,154 @@ export default function Chatbot({ externalOpen, onExternalOpenHandled }) {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); 
   }, [messages, typing]);
 
-  const send = async (customMsg = null) => {
-    const msg = customMsg || input.trim();
-    if (!msg && !selectedImage) return;
-    
-    const userMessage = { 
-  from: 'user', 
-  text: msg,
-  image: imagePreview
-};
+const send = async (customMsg = null) => {
+  const msg = customMsg || input.trim();
+  if (!msg && !selectedImage) return;
 
-setMessages(m => [...m, userMessage]);
-    setConversationHistory(h => [...h, userMessage]);
-    setInput('');
-    setTyping(true);
-    setLoading(true);
+  const userMessage = { from: 'user', text: msg, image: imagePreview };
+  setMessages(m => [...m, userMessage]);
+  setConversationHistory(h => [...h, userMessage]);
+  setInput('');
+  setTyping(true);
+  setLoading(true);
 
-    try {
-      // If image is selected, analyze it
-      if (selectedImage) {
-  await analyzeImage(msg);
-
-  setSelectedImage(null);
-  setImagePreview(null);
-
-  return;
-}
-
-      // Regular chat
-      const { data } = await API.post('/ai/chat', { 
-        message: msg,
-        conversationHistory 
-      });
-      
-      await new Promise(r => setTimeout(r, 600)); // Simulate typing
-      setTyping(false);
-      
-      const botMessage = { 
-        from: 'bot', 
-        text: data.data.message, 
-        action: data.data.action, 
-        target: data.data.target 
-      };
-      
-      setMessages(m => [...m, botMessage]);
-      setConversationHistory(h => [...h, botMessage]);
-      
-    } catch (error) {
-      setTyping(false);
-      setMessages(m => [...m, { 
-        from: 'bot', 
-        text: "I'm having trouble connecting. Please try again! 💄" 
-      }]);
-    } finally {
-      setLoading(false);
+  try {
+    // ── IMAGE ANALYSIS ──
+    if (selectedImage) {
+      await analyzeImage(msg);
+      setSelectedImage(null);
+      setImagePreview(null);
+      return;
     }
-  };
+
+    // ── BOOKING FLOW ──
+    if (bookingState === 'askService') {
+      setBookingData(p => ({ ...p, service: msg }));
+      setBookingState('askDate');
+      await new Promise(r => setTimeout(r, 600));
+      setTyping(false);
+      const botMsg = { from: 'bot', text: `Great choice! 💇‍♀️ What date would you like? (e.g. "tomorrow", "2nd June", "this Saturday")` };
+      setMessages(m => [...m, botMsg]);
+      setLoading(false);
+      return;
+    }
+
+    if (bookingState === 'askDate') {
+      setBookingData(p => ({ ...p, date: msg }));
+      setBookingState('askTime');
+      await new Promise(r => setTimeout(r, 600));
+      setTyping(false);
+      const botMsg = { from: 'bot', text: `Perfect! 📅 What time works for you?\n\nAvailable slots:\n• 09:00 AM • 10:00 AM • 11:00 AM\n• 12:00 PM • 02:00 PM • 03:00 PM\n• 04:00 PM • 05:00 PM • 06:00 PM` };
+      setMessages(m => [...m, botMsg]);
+      setLoading(false);
+      return;
+    }
+
+    if (bookingState === 'askTime') {
+      const newData = { ...bookingData, time: msg };
+      setBookingData(newData);
+      setBookingState('confirm');
+      await new Promise(r => setTimeout(r, 600));
+      setTyping(false);
+      const botMsg = { 
+        from: 'bot', 
+        text: `Here's your booking summary:\n\n💇‍♀️ **Service:** ${newData.service}\n📅 **Date:** ${newData.date}\n⏰ **Time:** ${msg}\n\nShall I confirm this booking? Reply **"yes"** to confirm or **"no"** to cancel.`,
+        bookingSummary: newData
+      };
+      setMessages(m => [...m, botMsg]);
+      setLoading(false);
+      return;
+    }
+
+    if (bookingState === 'confirm') {
+      if (/yes|confirm|ok|sure|yeah|yep/i.test(msg)) {
+        // Check if user is logged in
+        const token = localStorage.getItem('lakme_token');
+        if (!token) {
+          setBookingState(null);
+          setBookingData({});
+          await new Promise(r => setTimeout(r, 600));
+          setTyping(false);
+          const botMsg = { 
+            from: 'bot', 
+            text: "To book an appointment, you need to be logged in first! 🔐", 
+            action: 'navigate', 
+            target: '/login' 
+          };
+          setMessages(m => [...m, botMsg]);
+          setLoading(false);
+          return;
+        }
+
+        // Make real booking
+        try {
+          const { data } = await API.post('/ai/chat-book', {
+            serviceName: bookingData.service,
+            dateText: bookingData.date,
+            timeSlot: bookingData.time,
+          });
+
+          setBookingState(null);
+          setBookingData({});
+          await new Promise(r => setTimeout(r, 600));
+          setTyping(false);
+
+          if (data.success) {
+            const botMsg = { 
+              from: 'bot', 
+              text: `🎉 **Booking Confirmed!**\n\n✅ ${data.message}\n\n📧 A confirmation email has been sent to you!\n\n🌟 You earned loyalty points for this booking!`
+            };
+            setMessages(m => [...m, botMsg]);
+          } else {
+            setMessages(m => [...m, { from: 'bot', text: `Sorry, couldn't book: ${data.message}. Please try the booking page!` }]);
+          }
+        } catch (err) {
+          setBookingState(null);
+          setTyping(false);
+          setMessages(m => [...m, { from: 'bot', text: "Booking failed. Please try again or use the Book Now page! 💄" }]);
+        }
+        setLoading(false);
+        return;
+
+      } else {
+        // User said no
+        setBookingState(null);
+        setBookingData({});
+        await new Promise(r => setTimeout(r, 600));
+        setTyping(false);
+        setMessages(m => [...m, { from: 'bot', text: "No problem! Booking cancelled. Is there anything else I can help you with? 💄" }]);
+        setLoading(false);
+        return;
+      }
+    }
+
+    // ── DETECT BOOKING TRIGGER ──
+    if (/\b(book|appointment|schedule|reserve)\b/i.test(msg)) {
+      setBookingState('askService');
+      await new Promise(r => setTimeout(r, 600));
+      setTyping(false);
+      const botMsg = { from: 'bot', text: "I'd love to book an appointment for you! 💄\n\nWhich service are you interested in?\n\n• Hair Cut & Styling\n• Hair Colour\n• Balayage & Highlights\n• Facial\n• Bridal Makeup\n• Manicure / Pedicure\n• Hair Spa\n• Waxing" };
+      setMessages(m => [...m, botMsg]);
+      setLoading(false);
+      return;
+    }
+
+    // ── NORMAL AI CHAT ──
+    const { data } = await API.post('/ai/chat', { message: msg, conversationHistory });
+    await new Promise(r => setTimeout(r, 600));
+    setTyping(false);
+    const botMessage = { from: 'bot', text: data.data.message, action: data.data.action, target: data.data.target };
+    setMessages(m => [...m, botMessage]);
+    setConversationHistory(h => [...h, botMessage]);
+
+  } catch (error) {
+    setTyping(false);
+    setMessages(m => [...m, { from: 'bot', text: "I'm having trouble connecting. Please try again! 💄" }]);
+  } finally {
+    setLoading(false);
+    setTyping(false);
+  }
+};
 
   const analyzeImage = async (additionalContext) => {
     try {
