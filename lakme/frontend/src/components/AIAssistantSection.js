@@ -68,37 +68,73 @@ Always sound premium, warm, and professional. Sign off sentences naturally. If a
     synthRef.current && synthRef.current.speak(utt);
   }
 
-  async function askGroq(userText) {
-    setPhase('thinking');
-    setStatusText('Thinking…');
+ async function askGroq(userText) {
+  setPhase('thinking');
+  setStatusText('Thinking…');
+
+  // Check if we have enough booking details
+  var bookingPattern = /book|appointment|schedule|reserve/i;
+  var hasService = /haircut|hair cut|color|colour|facial|spa|makeup|manicure|pedicure|waxing|bridal|balayage|highlights/i;
+  var hasDate = /today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d{1,2}(st|nd|rd|th)?|\d{1,2}\/\d{1,2}/i;
+  var hasTime = /\d{1,2}(:\d{2})?\s*(am|pm)/i;
+
+  if (bookingPattern.test(userText) && hasService.test(userText) && hasDate.test(userText) && hasTime.test(userText)) {
+    // Try to book directly
     try {
-      var res = await fetch('/api/ai/voice-chat', {
+      var token = localStorage.getItem('token');
+      if (!token) {
+        var reply = "To book an appointment by voice, you need to be logged in first. Please log in and try again!";
+        addMessage('assistant', reply);
+        speak(reply);
+        return;
+      }
+      var bookRes = await fetch('/api/ai/voice-book', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          
+          'Authorization': 'Bearer ' + token
         },
         body: JSON.stringify({
-          model: 'llama3-8b-8192',
-          max_tokens: 200,
-          temperature: 0.7,
-          messages: [{ role: 'system', content: SALON_SYSTEM }].concat(
-            messages.slice(-8).map(function(m) { return { role: m.role, content: m.text }; }),
-            [{ role: 'user', content: userText }]
-          )
+          serviceName: userText.match(hasService)?.[0] || '',
+          date: userText,
+          timeSlot: userText.match(hasTime)?.[0] || ''
         })
       });
-      var data = await res.json();
-      var reply = (data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content)
-        || "I'm sorry, I couldn't understand that. Please try again!";
-      addMessage('assistant', reply);
-      speak(reply);
-    } catch (e) {
-      var fallback = "I'm having a little trouble connecting right now. Please call us or use our chat — we're happy to help!";
-      addMessage('assistant', fallback);
-      speak(fallback);
+      var bookData = await bookRes.json();
+      if (bookData.success) {
+        addMessage('assistant', bookData.message);
+        speak(bookData.message);
+        return;
+      }
+    } catch(e) {
+      console.log('booking attempt failed, falling back to chat');
     }
   }
+
+  // Normal AI chat
+  try {
+    var res = await fetch('/api/ai/voice-chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages: [
+          { role: 'system', content: SALON_SYSTEM },
+          ...messages.slice(-8).map(function(m) { return { role: m.role, content: m.text }; }),
+          { role: 'user', content: userText }
+        ]
+      })
+    });
+    var data = await res.json();
+    var reply = (data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content)
+      || "I'm sorry, I couldn't understand that. Please try again!";
+    addMessage('assistant', reply);
+    speak(reply);
+  } catch(e) {
+    var fallback = "I'm having a little trouble connecting. Please call us or use our chat!";
+    addMessage('assistant', fallback);
+    speak(fallback);
+  }
+}
 
   function startListening() {
     var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
