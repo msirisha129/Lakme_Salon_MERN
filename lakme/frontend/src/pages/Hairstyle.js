@@ -146,66 +146,143 @@ export default function Hairstyle() {
 const allServices = [
   {
     name: 'Butterfly Haircut',
-    category: 'Hair',
+    category: 'Cut',
     price: '₹799',
     hairTypes: ['Wavy', 'Straight'],
-    faceShapes: ['Round', 'Oval'],
-   occasions: ['Party', 'Work', 'Everyday'],
-    description: 'Soft layered cut that adds beautiful movement.'
+    faceShapes: ['round', 'oval', 'heart'],
+    occasions: ['Party', 'Work', 'Everyday'],
+    lengths: ['Medium (chin to shoulder)', 'Long (below shoulder)'],
+    description: 'Soft layered cut that adds beautiful movement and frames your face.',
   },
-
   {
     name: 'Curl Defining Treatment',
     category: 'Treatment',
     price: '₹1299',
-    hairTypes: ['Curly'],
-    faceShapes: ['Square', 'Oval'],
-  occasions: ['Party', 'Casual', 'Everyday'],
-    description: 'Defines curls while reducing dryness and frizz.'
+    hairTypes: ['Curly', 'Coily'],
+    faceShapes: ['square', 'oval', 'diamond'],
+    occasions: ['Party', 'Everyday', 'Work'],
+    lengths: ['Short (above ears)', 'Medium (chin to shoulder)', 'Long (below shoulder)'],
+    description: 'Defines curls while reducing dryness and frizz for a bouncy finish.',
   },
-
   {
     name: 'Hair Spa',
     category: 'Care',
     price: '₹1499',
-    hairTypes: ['Curly', 'Wavy', 'Straight'],
-    faceShapes: ['Round', 'Square', 'Oval'],
-    occasions: ['Party', 'Work', 'Casual'],
-    description: 'Deep nourishment and glossy salon finish.'
+    hairTypes: ['Curly', 'Wavy', 'Straight', 'Coily'],
+    faceShapes: ['round', 'square', 'oval', 'heart', 'diamond'],
+    occasions: ['Everyday', 'Work'],
+    lengths: ['Short (above ears)', 'Medium (chin to shoulder)', 'Long (below shoulder)'],
+    description: 'Deep nourishment and glossy salon finish for all hair types.',
   },
-
   {
     name: 'Bridal Styling',
     category: 'Bridal',
     price: '₹4999',
-    hairTypes: ['Curly', 'Wavy', 'Straight'],
-    faceShapes: ['Round', 'Square', 'Oval'],
+    hairTypes: ['Curly', 'Wavy', 'Straight', 'Coily'],
+    faceShapes: ['round', 'square', 'oval', 'heart', 'diamond'],
     occasions: ['Bridal'],
-    description: 'Elegant premium styling for bridal occasions.'
-  }
+    lengths: ['Medium (chin to shoulder)', 'Long (below shoulder)'],
+    description: 'Elegant premium styling for your most special occasion.',
+  },
+  {
+    name: 'Sleek Blowout',
+    category: 'Styling',
+    price: '₹999',
+    hairTypes: ['Straight', 'Wavy'],
+    faceShapes: ['oval', 'heart', 'diamond'],
+    occasions: ['Work', 'Party'],
+    lengths: ['Medium (chin to shoulder)', 'Long (below shoulder)'],
+    description: 'Polished, frizz-free blowout for a professional and refined look.',
+  },
+  {
+    name: 'Balayage & Highlights',
+    category: 'Colour',
+    price: '₹2999',
+    hairTypes: ['Straight', 'Wavy'],
+    faceShapes: ['oval', 'heart', 'round'],
+    occasions: ['Party', 'Everyday'],
+    lengths: ['Medium (chin to shoulder)', 'Long (below shoulder)'],
+    description: 'Sun-kissed dimension and depth with natural-looking colour.',
+  },
+  {
+    name: 'Scalp Treatment',
+    category: 'Care',
+    price: '₹1199',
+    hairTypes: ['Coily', 'Curly', 'Straight'],
+    faceShapes: ['round', 'square', 'oval', 'heart', 'diamond'],
+    occasions: ['Everyday', 'Work'],
+    lengths: ['Short (above ears)', 'Medium (chin to shoulder)'],
+    description: 'Nourishes roots and promotes healthy hair growth.',
+  },
+  {
+    name: 'Party Updo',
+    category: 'Styling',
+    price: '₹1799',
+    hairTypes: ['Curly', 'Wavy', 'Straight'],
+    faceShapes: ['round', 'oval', 'square', 'heart', 'diamond'],
+    occasions: ['Party'],
+    lengths: ['Medium (chin to shoulder)', 'Long (below shoulder)'],
+    description: 'Glamorous updo styled to turn heads at any event.',
+  },
+  {
+    name: 'Keratin Smoothing',
+    category: 'Treatment',
+    price: '₹3499',
+    hairTypes: ['Curly', 'Coily', 'Wavy'],
+    faceShapes: ['oval', 'heart', 'diamond'],
+    occasions: ['Work', 'Everyday'],
+    lengths: ['Medium (chin to shoulder)', 'Long (below shoulder)'],
+    description: 'Long-lasting frizz control and silky smooth finish.',
+  },
+  {
+    name: 'Bob Haircut',
+    category: 'Cut',
+    price: '₹699',
+    hairTypes: ['Straight', 'Wavy'],
+    faceShapes: ['heart', 'diamond', 'oval'],
+    occasions: ['Work', 'Everyday'],
+    lengths: ['Short (above ears)', 'Medium (chin to shoulder)'],
+    description: 'Classic sharp bob that adds structure and sophistication.',
+  },
 ];
 
 const recommendedServices = allServices
   .map(service => {
     let match = 0;
+    let reasons = 0;
 
-    if (service.hairTypes.includes(form.hairType))
-  match += 45;
+    // Occasion is the HIGHEST priority — wrong occasion = penalise heavily
+    if (service.occasions.includes(form.occasion)) {
+      match += 50;
+      reasons++;
+    } else {
+      match -= 60; // hard penalty — wrong occasion kills the recommendation
+    }
 
-if (service.faceShapes.includes(form.faceShape))
-  match += 35;
+    if (service.hairTypes.includes(form.hairType)) {
+      match += 30;
+      reasons++;
+    }
 
-if (service.occasions.includes(form.occasion))
-  match += 40;
+    if (service.faceShapes.includes(form.faceShape)) {
+      match += 15;
+      reasons++;
+    }
 
-    return {
-      ...service,
-      match
-    };
+    if (service.lengths.includes(form.length)) {
+      match += 5;
+      reasons++;
+    }
+
+    // Normalize to 0-100
+    const maxPossible = 100;
+    const normalized = Math.min(100, Math.max(0, Math.round((match / maxPossible) * 100)));
+
+    return { ...service, match: normalized, reasons };
   })
+  .filter(s => s.match >= 40) // only show genuinely relevant services
   .sort((a, b) => b.match - a.match)
-  .filter(service => service.match >= 30)
-.slice(0, 3);
+  .slice(0, 3);
   return (
     <div style={{ paddingTop: 72, minHeight: '100vh', background: 'var(--cream)' }}>
 
@@ -235,7 +312,7 @@ if (service.occasions.includes(form.occasion))
       </div>
 
       {/* ── Main Content ── */}
-      <div className="container" style={{ maxWidth: 1200, padding: '48px 24px' }}>
+      <div className="container" style={{ maxWidth: 1200, padding: '48px 24px', background: 'var(--cream)' }}>
 
         {/* ── STEP 1: Questions ── */}
         {step === 1 && (
@@ -248,21 +325,23 @@ if (service.occasions.includes(form.occasion))
                 const done = !!vals[i];
                 return (
                   <div key={i} style={{ flex: 1 }}>
-                    <div style={{ height: 3, borderRadius: 2, background: done ? 'var(--gold)' : 'var(--border-light)', marginBottom: 6, transition: 'background 0.3s' }} />
-                    <div style={{ fontSize: 10, letterSpacing: 1, textTransform: 'uppercase', color: done ? 'var(--gold)' : 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <div style={{ height: 3, borderRadius: 2, background: done ? 'var(--gold)' : '#DDD4C4', marginBottom: 6, transition: 'background 0.3s' }} />
+                    <div style={{ fontSize: 10, letterSpacing: 1, textTransform: 'uppercase', color: done ? 'var(--gold)' : '#999', display: 'flex', alignItems: 'center', gap: 4 }}>
                       {done && <CheckCircle size={10} />} {label}
                     </div>
                   </div>
+
                 );
+                
               })}
             </div>
 
             {/* Q1 — Face Shape */}
             <div style={{ marginBottom: 40 }}>
-              <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', marginBottom: 6 }}>
+              <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', marginBottom: 6, color: 'var(--black)' }}>
                 What's your face shape?
               </h3>
-              <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 20 }}>
+              <p style={{ color: '#888', fontSize: 13, marginBottom: 20 }}>
                 Not sure? Look in a mirror and trace your face outline
               </p>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
@@ -271,16 +350,31 @@ if (service.occasions.includes(form.occasion))
                     key={fs.value}
                     onClick={() => setForm(f => ({ ...f, faceShape: fs.value }))}
                     style={{
-                      background: form.faceShape === fs.value ? 'linear-gradient(135deg, var(--gold), var(--gold-dark))' : 'white',
-                      border: `1px solid ${form.faceShape === fs.value ? 'var(--gold)' : 'var(--border-light)'}`,
-                      borderRadius: 10, padding: '20px 12px', textAlign: 'center',
-                      cursor: 'pointer', transition: 'all 0.25s',
-                      boxShadow: form.faceShape === fs.value ? '0 4px 16px rgba(201,168,76,0.3)' : 'none',
+                      background: form.faceShape === fs.value ? 'linear-gradient(135deg, var(--gold), var(--gold-dark))' : '#F8F1E5',
+                      border: `2px solid ${form.faceShape === fs.value ? 'var(--gold)' : '#D9CAB8'}`,
+                      borderRadius: 14, padding: '24px 16px', textAlign: 'center',
+                      cursor: 'pointer', transition: 'all 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
+                      boxShadow: form.faceShape === fs.value ? '0 8px 24px rgba(201,168,76,0.25)' : '0 4px 12px rgba(0,0,0,0.08)',
+                      transform: form.faceShape === fs.value ? 'translateY(-2px)' : 'translateY(0)',
+                    }}
+                    onMouseEnter={(e) => {
+                      if (form.faceShape !== fs.value) {
+                        e.currentTarget.style.background = '#F5E9DC';
+                        e.currentTarget.style.borderColor = '#C9B299';
+                        e.currentTarget.style.boxShadow = '0 6px 16px rgba(0,0,0,0.1)';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (form.faceShape !== fs.value) {
+                        e.currentTarget.style.background = '#F8F1E5';
+                        e.currentTarget.style.borderColor = '#D9CAB8';
+                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.08)';
+                      }
                     }}
                   >
-                    <div style={{ fontSize: 28, marginBottom: 8 }}>{fs.emoji}</div>
-                    <div style={{ fontWeight: 600, fontSize: 13, color: form.faceShape === fs.value ? 'white' : 'var(--text-primary)', marginBottom: 4 }}>{fs.label}</div>
-                    <div style={{ fontSize: 10, color: form.faceShape === fs.value ? 'rgba(255,255,255,0.7)' : 'var(--text-muted)', lineHeight: 1.4 }}>{fs.desc}</div>
+                    <div style={{ fontSize: 32, marginBottom: 8 }}>{fs.emoji}</div>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: form.faceShape === fs.value ? 'white' : '#1F1F1F', marginBottom: 6 }}>{fs.label}</div>
+                    <div style={{ fontSize: 11, color: form.faceShape === fs.value ? 'rgba(255,255,255,0.9)' : '#6F6F6F', lineHeight: 1.5 }}>{fs.desc}</div>
                   </div>
                 ))}
               </div>
@@ -288,19 +382,35 @@ if (service.occasions.includes(form.occasion))
 
             {/* Q2 — Hair Type */}
             <div style={{ marginBottom: 40 }}>
-              <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', marginBottom: 20 }}>
+              <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', marginBottom: 20, color: 'var(--black)' }}>
                 Your hair texture?
               </h3>
               <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                 {HAIR_TYPES.map(t => (
                   <button key={t} onClick={() => setForm(f => ({ ...f, hairType: t }))} style={{
-                    padding: '12px 28px', borderRadius: 50, fontSize: 13, cursor: 'pointer', transition: 'all 0.25s',
-                    background: form.hairType === t ? 'linear-gradient(135deg, var(--gold), var(--gold-dark))' : 'white',
-                    border: `1px solid ${form.hairType === t ? 'var(--gold)' : 'var(--border-light)'}`,
-                    color: form.hairType === t ? 'white' : 'var(--text-primary)',
-                    boxShadow: form.hairType === t ? '0 4px 16px rgba(201,168,76,0.3)' : 'none',
-                    fontWeight: form.hairType === t ? 600 : 400,
-                  }}>
+                    padding: '14px 32px', borderRadius: 50, fontSize: 13, cursor: 'pointer', transition: 'all 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
+                    background: form.hairType === t ? 'linear-gradient(135deg, var(--gold), var(--gold-dark))' : '#F8F1E5',
+                    border: `1px solid ${form.hairType === t ? 'rgba(255,215,130,0.9)' : '#D9CAB8'}`,
+                    color: form.hairType === t ? 'white' : '#1F1F1F',
+                    boxShadow: form.hairType === t ? '0 8px 24px rgba(201,168,76,0.24)' : '0 4px 12px rgba(0,0,0,0.12)',
+                    fontWeight: form.hairType === t ? 700 : 600,
+                    transform: form.hairType === t ? 'translateY(-2px)' : 'translateY(0)',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (form.hairType !== t) {
+                      e.target.style.background = '#F5E9DC';
+                      e.target.style.borderColor = '#C9B299';
+                      e.target.style.boxShadow = '0 6px 16px rgba(0,0,0,0.12)';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (form.hairType !== t) {
+                      e.target.style.background = '#F8F1E5';
+                      e.target.style.borderColor = '#D9CAB8';
+                      e.target.style.boxShadow = '0 4px 12px rgba(0,0,0,0.12)';
+                    }
+                  }}
+                  >
                     {t}
                   </button>
                 ))}
@@ -309,19 +419,35 @@ if (service.occasions.includes(form.occasion))
 
             {/* Q3 — Length */}
             <div style={{ marginBottom: 40 }}>
-              <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', marginBottom: 20 }}>
+              <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', marginBottom: 20, color: 'var(--black)' }}>
                 Desired length?
               </h3>
               <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                 {LENGTHS.map(l => (
                   <button key={l} onClick={() => setForm(f => ({ ...f, length: l }))} style={{
-                    padding: '12px 24px', borderRadius: 50, fontSize: 13, cursor: 'pointer', transition: 'all 0.25s',
-                    background: form.length === l ? 'linear-gradient(135deg, var(--gold), var(--gold-dark))' : 'white',
-                    border: `1px solid ${form.length === l ? 'var(--gold)' : 'var(--border-light)'}`,
-                    color: form.length === l ? 'white' : 'var(--text-primary)',
-                    boxShadow: form.length === l ? '0 4px 16px rgba(201,168,76,0.3)' : 'none',
-                    fontWeight: form.length === l ? 600 : 400,
-                  }}>
+                    padding: '14px 28px', borderRadius: 50, fontSize: 13, cursor: 'pointer', transition: 'all 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
+                    background: form.length === l ? 'linear-gradient(135deg, var(--gold), var(--gold-dark))' : '#F8F1E5',
+                    border: `1px solid ${form.length === l ? 'rgba(255,215,130,0.9)' : '#D9CAB8'}`,
+                    color: form.length === l ? 'white' : '#1F1F1F',
+                    boxShadow: form.length === l ? '0 8px 24px rgba(201,168,76,0.24)' : '0 4px 12px rgba(0,0,0,0.12)',
+                    fontWeight: form.length === l ? 700 : 600,
+                    transform: form.length === l ? 'translateY(-2px)' : 'translateY(0)',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (form.length !== l) {
+                      e.target.style.background = '#F5E9DC';
+                      e.target.style.borderColor = '#C9B299';
+                      e.target.style.boxShadow = '0 6px 16px rgba(0,0,0,0.12)';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (form.length !== l) {
+                      e.target.style.background = '#F8F1E5';
+                      e.target.style.borderColor = '#D9CAB8';
+                      e.target.style.boxShadow = '0 4px 12px rgba(0,0,0,0.12)';
+                    }
+                  }}
+                  >
                     {l}
                   </button>
                 ))}
@@ -330,19 +456,35 @@ if (service.occasions.includes(form.occasion))
 
             {/* Q4 — Occasion */}
             <div style={{ marginBottom: 48 }}>
-              <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', marginBottom: 20 }}>
+              <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', marginBottom: 20, color: 'var(--black)' }}>
                 What's the occasion?
               </h3>
               <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                 {OCCASIONS.map(o => (
                   <button key={o} onClick={() => setForm(f => ({ ...f, occasion: o }))} style={{
-                    padding: '12px 28px', borderRadius: 50, fontSize: 13, cursor: 'pointer', transition: 'all 0.25s',
-                    background: form.occasion === o ? 'linear-gradient(135deg, var(--rose), #8B0028)' : 'white',
-                    border: `1px solid ${form.occasion === o ? 'var(--rose)' : 'var(--border-light)'}`,
-                    color: form.occasion === o ? 'white' : 'var(--text-primary)',
-                    boxShadow: form.occasion === o ? '0 4px 16px rgba(180,0,60,0.2)' : 'none',
-                    fontWeight: form.occasion === o ? 600 : 400,
-                  }}>
+                    padding: '14px 32px', borderRadius: 50, fontSize: 13, cursor: 'pointer', transition: 'all 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
+                    background: form.occasion === o ? 'linear-gradient(135deg, var(--rose), #8B0028)' : '#F8F1E5',
+                    border: `1px solid ${form.occasion === o ? 'rgba(255,145,160,0.9)' : '#D9CAB8'}`,
+                    color: form.occasion === o ? 'white' : '#1F1F1F',
+                    boxShadow: form.occasion === o ? '0 8px 24px rgba(180,0,60,0.22)' : '0 4px 12px rgba(0,0,0,0.12)',
+                    fontWeight: form.occasion === o ? 700 : 600,
+                    transform: form.occasion === o ? 'translateY(-2px)' : 'translateY(0)',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (form.occasion !== o) {
+                      e.target.style.background = '#F5E9DC';
+                      e.target.style.borderColor = '#C9B299';
+                      e.target.style.boxShadow = '0 6px 16px rgba(0,0,0,0.12)';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (form.occasion !== o) {
+                      e.target.style.background = '#F8F1E5';
+                      e.target.style.borderColor = '#D9CAB8';
+                      e.target.style.boxShadow = '0 4px 12px rgba(0,0,0,0.12)';
+                    }
+                  }}
+                  >
                     {o}
                   </button>
                 ))}
@@ -370,7 +512,7 @@ if (service.occasions.includes(form.occasion))
             </button>
 
             {!allAnswered && (
-              <p style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 12, marginTop: 12 }}>
+              <p style={{ textAlign: 'center', color: '#999', fontSize: 12, marginTop: 12 }}>
                 Please answer all 4 questions above to continue
               </p>
             )}
@@ -390,7 +532,7 @@ if (service.occasions.includes(form.occasion))
               }}>
                 <Sparkles size={30} color="white" />
               </div>
-              <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '3rem', marginBottom: 10 }}>
+              <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '3rem', marginBottom: 10, color: 'var(--black)' }}>
                 Your Perfect Styles
               </h2>
               <p style={{ color: 'var(--text-secondary)', fontSize: 16 }}>

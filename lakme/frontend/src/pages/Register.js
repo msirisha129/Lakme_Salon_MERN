@@ -7,7 +7,14 @@ import toast from 'react-hot-toast';
 export default function Register() {
   const { register } = useAuth();
   const navigate = useNavigate();
-  const [form, setForm] = useState({ name: '', email: '', phone: '', password: '', confirm: '' });
+  const urlParams = new URLSearchParams(window.location.search);
+  const [form, setForm] = useState({ 
+  name: urlParams.get('name') || '', 
+  email: urlParams.get('email') || '', 
+  phone: urlParams.get('phone') || '', 
+  password: '', 
+  confirm: '' 
+}); 
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e) => {

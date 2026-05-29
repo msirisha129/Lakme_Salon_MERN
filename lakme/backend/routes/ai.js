@@ -7,6 +7,7 @@ const multer = require('multer');
 const Groq = require('groq-sdk');
 const Service = require('../models/Service');
 const Booking = require('../models/Booking');
+const User = require('../models/User');
 const { protect } = require('../middleware/auth');
 
 // Configure multer for image uploads

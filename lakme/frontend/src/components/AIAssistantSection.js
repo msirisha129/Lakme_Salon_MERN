@@ -13,32 +13,39 @@ function VoiceAssistantModal({ onClose }) {
   const synthRef = React.useRef(window.speechSynthesis);
   const recognitionRef = React.useRef(null);
   const messagesEndRef = React.useRef(null);
-
+  var _rs = React.useState(null);
+  var registrationStep = _rs[0], setRegistrationStep = _rs[1];
+  var registrationStepRef = React.useRef(null);
+  var _rd = React.useState({});
+  var registrationData = _rd[0], setRegistrationData = _rd[1];
   const SALON_SYSTEM = `You are Lakme Salon's elegant voice assistant. You speak warmly and concisely — 2-3 sentences max per reply since responses are read aloud. You help customers with:
 - Services: Hair Cut & Styling, Colour, Highlights/Balayage, Hair Spa, Bridal Makeup, Party Makeup, Facial, Manicure, Pedicure, Waxing, Threading
 - Booking appointments
 - Pricing enquiries
 - General salon info
-Always sound premium, warm, and professional. Sign off sentences naturally. If asked to book, collect their name, service, and preferred time.`;
-
+Always sound premium, warm, and professional. Sign off sentences naturally. If asked to book, collect their name, service, and preferred time.
+If someone wants to register or sign up, do NOT ask for email or password. Just say you will collect their name and phone by voice and redirect them.`;
  React.useEffect(() => {
-    var timer = setTimeout(() => greetUser(), 600);
-    return () => clearTimeout(timer);
-    return () => {
-      synthRef.current && synthRef.current.cancel();
-      recognitionRef.current && recognitionRef.current.abort();
-    };
-  }, []);
+  var timer = setTimeout(() => greetUser(), 600);
+  return () => clearTimeout(timer);
+  return () => {
+    synthRef.current && synthRef.current.cancel();
+    recognitionRef.current && recognitionRef.current.abort();
+  };
+}, []);
+React.useEffect(function() {
+  registrationStepRef.current = registrationStep;
+}, [registrationStep]);
 
   React.useEffect(() => {
     messagesEndRef.current && messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
   function greetUser() {
-    var greeting = "Hello! Welcome to Lakmé Salon. I'm your personal beauty assistant. How can I help you today? Feel free to ask about our services, pricing, or book an appointment!";
-    addMessage('assistant', greeting);
-    speak(greeting);
-  }
+  var greeting = "Hello! Welcome to Lakmé Salon. I'm your personal beauty assistant. You can ask about services, book appointments, or say 'I want to register' to create an account!";
+  addMessage('assistant', greeting);
+  speak(greeting);
+}
 
   function addMessage(role, text) {
     setMessages(function(prev) {
@@ -59,16 +66,50 @@ Always sound premium, warm, and professional. Sign off sentences naturally. If a
           || voices.find(function(v) { return v.lang.startsWith('en'); })
           || null;
     if (v) utt.voice = v;
-    utt.onend = function() { 
-  setPhase('idle'); 
-  setStatusText('Listening again…');
-  setTimeout(function() { startListening(); }, 800);
+  utt.onend = function() {
+  setPhase('idle');
+  var step = registrationStepRef.current;
+  if (step === null) {
+    setTimeout(startListening, 300);
+  } else {
+    setStatusText('Click the mic to speak');
+  }
 };
-    utt.onerror = function() { setPhase('idle'); setStatusText('Click the mic to speak'); };
-    synthRef.current && synthRef.current.speak(utt);
+utt.onerror = function() { setPhase('idle'); setStatusText('Click the mic to speak'); };
+synthRef.current && synthRef.current.speak(utt);
   }
 
  async function askGroq(userText) {
+  // ── REGISTRATION FLOW ──
+if (registrationStep === 'askName') {
+  setRegistrationData(function(prev) { return Object.assign({}, prev, { name: userText }); });
+  setRegistrationStep('askPhone');
+  var q = "Thank you! What's your phone number?";
+  addMessage('assistant', q);
+  speak(q);
+  return;
+}
+if (registrationStep === 'askPhone') {
+  var phone = userText.replace(/\D/g, '').slice(-10);
+  setRegistrationData(function(prev) { return Object.assign({}, prev, { phone: phone }); });
+  setRegistrationStep(null);
+  var name = registrationData.name;
+  var msg = "Perfect! I have your name as " + name + " and phone as " + phone + ". Taking you to registration now — just add your email and password to complete!";
+  addMessage('assistant', msg);
+  speak(msg);
+  setTimeout(function() {
+    window.location.href = '/register?name=' + encodeURIComponent(name) + '&phone=' + encodeURIComponent(phone);
+  }, 3000);
+  return;
+}
+// ── REGISTER TRIGGER ──
+if (/register|sign up|signup|create account|new account/i.test(userText)) {
+  setRegistrationStep('askName');
+  var r = "I'd love to help you register! First, what's your full name?";
+  addMessage('assistant', r);
+  speak(r);
+  return;
+}
   setPhase('thinking');
   setStatusText('Thinking…');
 
@@ -137,30 +178,78 @@ Always sound premium, warm, and professional. Sign off sentences naturally. If a
 }
 
   function startListening() {
-    var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) { setStatusText('Voice not supported — please use Message AI instead'); return; }
-    synthRef.current && synthRef.current.cancel();
-    var r = new SR();
-    r.lang = 'en-IN';
-    r.continuous = false;
-    r.interimResults = true;
-    r.onstart = function() { setPhase('listening'); setStatusText('Listening… speak now'); };
-    r.onresult = function(e) {
-      var t = '';
-      for (var i = e.resultIndex; i < e.results.length; i++) t += e.results[i][0].transcript;
-      setTranscript(t);
-      if (e.results[e.results.length - 1].isFinal) {
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { setStatusText('Voice not supported – please use Message AI instead'); return; }
+  synthRef.current && synthRef.current.cancel();
+
+  // Abort any existing recognition cleanly
+  if (recognitionRef.current) {
+    try { recognitionRef.current.abort(); } catch(e) {}
+  }
+
+  var r = new SR();
+  r.lang = 'en-IN';
+  r.continuous = true;          // ← FIX 1: don't stop on first pause
+  r.interimResults = true;
+  r.maxAlternatives = 1;
+
+  var silenceTimer = null;       // ← FIX 2: manual silence detection
+
+  r.onstart = function() {
+    setPhase('listening');
+    setStatusText('Listening… speak now');
+  };
+
+  r.onresult = function(e) {
+    // Clear silence timer on every new word
+    if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
+
+    var t = '';
+    for (var i = e.resultIndex; i < e.results.length; i++) {
+      t += e.results[i][0].transcript;
+    }
+    setTranscript(t);
+
+    if (e.results[e.results.length - 1].isFinal) {
+      // Got a final result — short pause then process
+      silenceTimer = setTimeout(function() {
         r.stop();
         setTranscript('');
         addMessage('user', t);
         askGroq(t);
-      }
-    };
-    r.onerror = function() { setPhase('idle'); setStatusText('Could not hear you — try again'); };
-    r.onend = function() { setPhase(function(p) { return p === 'listening' ? 'idle' : p; }); setStatusText('Click the mic to speak'); };
-    recognitionRef.current = r;
-    r.start();
-  }
+      }, 600);                   // ← FIX 3: 600ms grace period after final
+    } else {
+      // Interim — show live transcript, reset silence window
+      silenceTimer = setTimeout(function() {
+        // User stopped mid-sentence — treat as final
+        if (t.trim().length > 2) {
+          r.stop();
+          setTranscript('');
+          addMessage('user', t);
+          askGroq(t);
+        }
+      }, 2500);                  // ← FIX 4: 2.5s silence = done speaking
+    }
+  };
+
+  r.onerror = function(e) {
+    if (e.error === 'no-speech') {
+      // Don't show error for no-speech, just restart quietly
+      setStatusText('Listening… speak now');
+      return;
+    }
+    setPhase('idle');
+    setStatusText('Could not hear you – tap mic to try again');
+  };
+
+  r.onend = function() {
+    if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
+    setPhase(function(p) { return p === 'listening' ? 'idle' : p; });
+  };
+
+  recognitionRef.current = r;
+  r.start();
+}
 
   function stopListening() {
     recognitionRef.current && recognitionRef.current.stop();
@@ -284,6 +373,7 @@ function AIAssistantSection({ onOpenChat }) {
   var hoverVoice = _hv[0], setHoverVoice = _hv[1];
   var _hm = React.useState(false);
   var hoverMsg = _hm[0], setHoverMsg = _hm[1];
+  
 
   return React.createElement(
     'section',

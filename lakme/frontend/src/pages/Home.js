@@ -426,11 +426,61 @@ export default function Home({ onOpenChat }) {
             ].map((col, i) => (
               <div key={i}>
                 <div style={{ fontSize: 11, letterSpacing: 3, textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 20 }}>{col.title}</div>
-                {col.links.map((l, j) => (
-                  <div key={j} style={{ color: 'rgba(255,255,255,0.35)', fontSize: 13, marginBottom: 10, cursor: 'pointer', transition: 'color 0.2s' }}
-                    onMouseEnter={e => e.target.style.color = 'rgba(255,255,255,0.8)'}
-                    onMouseLeave={e => e.target.style.color = 'rgba(255,255,255,0.35)'}>{l}</div>
-                ))}
+                {col.links.map((l, j) => {
+  // Route map for Quick Links and Services
+  const routeMap = {
+    'Home': '/', 'Services': '/services', 'Book Now': '/booking',
+    'AI Stylist': '/hairstyle', 'Contact': '/contact',
+    'Hair': '/services', 'Skin': '/services', 'Nails': '/services',
+    'Bridal': '/services', 'Makeup': '/services', 'Spa': '/services',
+  };
+  const href = routeMap[l];
+  const isExternal = l === 'Instagram' || l === 'Facebook' || l === 'WhatsApp Us';
+  const isPhone = l.startsWith('+91');
+  const isEmail = l.includes('@');
+
+  const sharedStyle = {
+    color: 'rgba(255,255,255,0.35)', fontSize: 13, marginBottom: 10,
+    cursor: 'pointer', transition: 'color 0.2s', display: 'block',
+    textDecoration: 'none',
+  };
+
+  if (isPhone) return (
+    <a key={j} href={`tel:${l.replace(/\s/g,'')}`} style={sharedStyle}
+      onMouseEnter={e => e.target.style.color = 'rgba(255,255,255,0.8)'}
+      onMouseLeave={e => e.target.style.color = 'rgba(255,255,255,0.35)'}>{l}</a>
+  );
+  if (isEmail) return (
+    <a key={j} href={`mailto:${l}`} style={sharedStyle}
+      onMouseEnter={e => e.target.style.color = 'rgba(255,255,255,0.8)'}
+      onMouseLeave={e => e.target.style.color = 'rgba(255,255,255,0.35)'}>{l}</a>
+  );
+  if (l === 'WhatsApp Us') return (
+    <a key={j} href="https://wa.me/919876543210" target="_blank" rel="noreferrer" style={sharedStyle}
+      onMouseEnter={e => e.target.style.color = 'rgba(255,255,255,0.8)'}
+      onMouseLeave={e => e.target.style.color = 'rgba(255,255,255,0.35)'}>{l}</a>
+  );
+  if (l === 'Instagram') return (
+    <a key={j} href="https://instagram.com" target="_blank" rel="noreferrer" style={sharedStyle}
+      onMouseEnter={e => e.target.style.color = 'rgba(255,255,255,0.8)'}
+      onMouseLeave={e => e.target.style.color = 'rgba(255,255,255,0.35)'}>{l}</a>
+  );
+  if (l === 'Facebook') return (
+    <a key={j} href="https://facebook.com" target="_blank" rel="noreferrer" style={sharedStyle}
+      onMouseEnter={e => e.target.style.color = 'rgba(255,255,255,0.8)'}
+      onMouseLeave={e => e.target.style.color = 'rgba(255,255,255,0.35)'}>{l}</a>
+  );
+  if (href) return (
+    <Link key={j} to={href} style={sharedStyle}
+      onMouseEnter={e => e.target.style.color = 'rgba(255,255,255,0.8)'}
+      onMouseLeave={e => e.target.style.color = 'rgba(255,255,255,0.35)'}>{l}</Link>
+  );
+  return (
+    <div key={j} style={sharedStyle}
+      onMouseEnter={e => e.target.style.color = 'rgba(255,255,255,0.8)'}
+      onMouseLeave={e => e.target.style.color = 'rgba(255,255,255,0.35)'}>{l}</div>
+  );
+})}
               </div>
             ))}
           </div>
