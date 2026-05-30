@@ -60,3 +60,5 @@ connectDB();
 startReminderJob();
 
 app.listen(PORT, () => console.log(`🚀 Lakme API running on port ${PORT}`));
+
+
