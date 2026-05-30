@@ -18,13 +18,27 @@ function VoiceAssistantModal({ onClose }) {
   var registrationStepRef = React.useRef(null);
   var _rd = React.useState({});
   var registrationData = _rd[0], setRegistrationData = _rd[1];
-  const SALON_SYSTEM = `You are Lakme Salon's elegant voice assistant. You speak warmly and concisely — 2-3 sentences max per reply since responses are read aloud. You help customers with:
+  const SALON_SYSTEM = `You are Lakmé Salon's warm, elegant voice assistant. Keep replies to 2-3 sentences since they are read aloud.
+
+You help with:
 - Services: Hair Cut & Styling, Colour, Highlights/Balayage, Hair Spa, Bridal Makeup, Party Makeup, Facial, Manicure, Pedicure, Waxing, Threading
 - Booking appointments
-- Pricing enquiries
+- Pricing enquiries  
 - General salon info
-Always sound premium, warm, and professional. Sign off sentences naturally. If asked to book, collect their name, service, and preferred time.
-If someone wants to register or sign up, do NOT ask for email or password. Just say you will collect their name and phone by voice and redirect them.`;
+- Registering new customers
+
+IMPORTANT RULES:
+- NEVER say you cannot help or cut off the conversation
+- If asked something outside salon topics, gently redirect: "That's a bit outside my expertise, but I'd love to help you with your beauty needs!"
+- Always stay warm, engaged and helpful
+- If user seems confused, ask a clarifying question
+- Never end conversation abruptly
+- If booking details are given, confirm them back warmly
+- Always sound premium and professional
+- If user is already logged in and gives booking details, confirm the booking directly
+
+If someone wants to register, collect name and phone then redirect to registration page.
+If someone gives booking details (name + service + date + time), confirm it warmly and say confirmation email will be sent.`;
  React.useEffect(() => {
   var timer = setTimeout(() => greetUser(), 600);
   return () => clearTimeout(timer);
@@ -41,10 +55,17 @@ React.useEffect(function() {
     messagesEndRef.current && messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  function greetUser() {
-  var greeting = "Hello! Welcome to Lakmé Salon. I'm your personal beauty assistant. You can ask about services, book appointments, or say 'I want to register' to create an account!";
+ function greetUser() {
+  var greeting = "Hello! Welcome to Lakmé Salon. I'm your personal beauty assistant. You can ask about services, book appointments, or say I want to register to create an account!";
   addMessage('assistant', greeting);
-  speak(greeting);
+  // Wait for voices to load before speaking
+  if (window.speechSynthesis.getVoices().length === 0) {
+    window.speechSynthesis.onvoiceschanged = function() {
+      speak(greeting);
+    };
+  } else {
+    speak(greeting);
+  }
 }
 
   function addMessage(role, text) {
@@ -66,16 +87,32 @@ React.useEffect(function() {
           || voices.find(function(v) { return v.lang.startsWith('en'); })
           || null;
     if (v) utt.voice = v;
-  utt.onend = function() {
+ utt.onend = function() {
   setPhase('idle');
-  var step = registrationStepRef.current;
-  if (step === null) {
-    setTimeout(startListening, 300);
-  } else {
-    setStatusText('Click the mic to speak');
-  }
+  setStatusText('Listening again…');
+  // Wait until speech fully finishes, then auto-listen
+  setTimeout(function() {
+    // Don't auto-listen during registration flow
+    if (registrationStep !== null) {
+      setStatusText('Tap mic to speak');
+      return;
+    }
+    try {
+      var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (SR) {
+        startListening();
+      } else {
+        setStatusText('Tap mic to speak');
+      }
+    } catch(e) {
+      setStatusText('Tap mic to speak');
+    }
+  }, 1500); // 1.5 second gap after speaking ends
 };
-utt.onerror = function() { setPhase('idle'); setStatusText('Click the mic to speak'); };
+utt.onerror = function() {
+  setPhase('idle');
+  setStatusText('Tap mic to speak');
+};
 synthRef.current && synthRef.current.speak(utt);
   }
 
@@ -102,7 +139,16 @@ if (registrationStep === 'askPhone') {
   }, 3000);
   return;
 }
-// ── REGISTER TRIGGER ──
+// Already registered — wants to book
+if (/already.*(register|account|member)|have.*(account|registered)/i.test(userText)) {
+  var alreadyMsg = "Welcome back! Let me help you book an appointment. Which service would you like to book?";
+  setBookingStep('askService'); // if you have booking flow
+  addMessage('assistant', alreadyMsg);
+  speak(alreadyMsg);
+  return;
+}
+
+// New registration
 if (/register|sign up|signup|create account|new account/i.test(userText)) {
   setRegistrationStep('askName');
   var r = "I'd love to help you register! First, what's your full name?";
@@ -110,47 +156,58 @@ if (/register|sign up|signup|create account|new account/i.test(userText)) {
   speak(r);
   return;
 }
+
+// Irrelevant questions
+if (/weather|cricket|movie|news|stock|politics|sports|recipe|cook|travel|hotel|flight/i.test(userText)) {
+  var sorry = "I'm sorry, I can only assist with Lakmé Salon services, bookings, and appointments. How can I help you with your beauty needs today?";
+  addMessage('assistant', sorry);
+  speak(sorry);
+  return;
+}
   setPhase('thinking');
   setStatusText('Thinking…');
 
-  // Check if we have enough booking details
-  var bookingPattern = /book|appointment|schedule|reserve/i;
-  var hasService = /haircut|hair cut|color|colour|facial|spa|makeup|manicure|pedicure|waxing|bridal|balayage|highlights/i;
-  var hasDate = /today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d{1,2}(st|nd|rd|th)?|\d{1,2}\/\d{1,2}/i;
-  var hasTime = /\d{1,2}(:\d{2})?\s*(am|pm)/i;
+ // ── CHECK CONVERSATION FOR COMPLETE BOOKING DETAILS ──
+var fullConvo = messages.slice(-6).map(function(m) { return m.text; }).join(' ') + ' ' + userText;
 
-  if (bookingPattern.test(userText) && hasService.test(userText) && hasDate.test(userText) && hasTime.test(userText)) {
-    // Try to book directly
-    try {
-      var token = localStorage.getItem('token');
-      if (!token) {
-        var reply = "To book an appointment by voice, you need to be logged in first. Please log in and try again!";
-        addMessage('assistant', reply);
-        speak(reply);
-        return;
-      }
-      var bookRes = await fetch('/api/ai/voice-book', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + token
-        },
-        body: JSON.stringify({
-          serviceName: userText.match(hasService)?.[0] || '',
-          date: userText,
-          timeSlot: userText.match(hasTime)?.[0] || ''
-        })
-      });
-      var bookData = await bookRes.json();
-      if (bookData.success) {
-        addMessage('assistant', bookData.message);
-        speak(bookData.message);
-        return;
-      }
-    } catch(e) {
-      console.log('booking attempt failed, falling back to chat');
-    }
+var serviceMatch = fullConvo.match(/haircut|hair cut|manicure|pedicure|facial|colour|color|highlights|balayage|spa|makeup|waxing|threading|bridal/i);
+var timeMatch = fullConvo.match(/\d{1,2}[:.]\d{2}\s*(am|pm)|\d{1,2}\s*(am|pm)/i);
+var dateMatch = fullConvo.match(/today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d{1,2}(st|nd|rd|th)?/i);
+
+if (serviceMatch && timeMatch && dateMatch) {
+  var token = localStorage.getItem('lakme_token');
+  if (!token) {
+    var loginMsg = "To complete your booking, please log in first. Shall I take you to the login page?";
+    addMessage('assistant', loginMsg);
+    speak(loginMsg);
+    return;
   }
+  try {
+    setStatusText('Booking your appointment…');
+    var bookRes = await fetch('/api/ai/voice-book', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token
+      },
+      body: JSON.stringify({
+        serviceName: serviceMatch[0],
+        dateText: dateMatch[0],
+        timeSlot: timeMatch[0]
+      })
+    });
+    var bookData = await bookRes.json();
+    if (bookData.success) {
+      var confirmMsg = "Perfect! " + bookData.message + ". A confirmation email has been sent to you. We look forward to seeing you!";
+      addMessage('assistant', confirmMsg);
+      speak(confirmMsg);
+      setPhase('idle');
+      return;
+    }
+  } catch(bookErr) {
+    console.log('Voice booking error:', bookErr);
+  }
+}
 
   // Normal AI chat
   try {

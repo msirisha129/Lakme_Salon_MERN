@@ -119,10 +119,11 @@ const send = async (customMsg = null) => {
         // Make real booking
         try {
           const { data } = await API.post('/ai/chat-book', {
-            serviceName: bookingData.service,
-            dateText: bookingData.date,
+          serviceName: bookingData.service,
+             dateText: bookingData.date,
             timeSlot: bookingData.time,
-          });
+});
+console.log('Booking response:', data);
 
           setBookingState(null);
           setBookingData({});

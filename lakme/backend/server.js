@@ -4,6 +4,7 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const path = require('path');
 const startReminderJob = require('./middleware/reminderJob');
+const logger = require('./middleware/logger');
 
 dotenv.config();
 
@@ -50,8 +51,9 @@ mongoose.connection.on('disconnected', () => {
   setTimeout(connectDB, 5000);
 });
 
+const PORT = process.env.PORT || 5000;
+
 connectDB();
 startReminderJob();
 
-const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 Lakme API running on port ${PORT}`));

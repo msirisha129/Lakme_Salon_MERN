@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 
-const TABS = ['Dashboard', 'Bookings', 'Services', 'Users'];
+const TABS = ['Dashboard', 'Bookings', 'Services', 'Users', 'Logs'];
 const CATS = ['Hair', 'Skin', 'Nails', 'Bridal', 'Makeup', 'Spa'];
 
 export default function Admin() {
@@ -19,7 +19,9 @@ export default function Admin() {
   const [newService, setNewService] = useState(false);
   const [sForm, setSForm] = useState({ name: '', category: 'Hair', description: '', price: '', duration: '', popular: false });
   const [loading, setLoading] = useState(false);
-
+  const [logTab, setLogTab] = useState('booking');
+  const [logs, setLogs] = useState([]);
+  const [logsLoading, setLogsLoading] = useState(false);
   useEffect(() => {
     if (!user || user.role !== 'admin') { navigate('/'); return; }
     loadData();
@@ -68,6 +70,48 @@ export default function Admin() {
     setServices(s => s.filter(x => x._id !== id));
     toast.success('Deleted');
   };
+  const loadLogs = async (type) => {
+  setLogsLoading(true);
+  try {
+    const { data } = await API.get(`/admin/logs?type=${type}`);
+    setLogs(data.data || []);
+  } catch (err) {
+    toast.error('Failed to load logs');
+  } finally {
+    setLogsLoading(false);
+  }
+};
+
+const downloadLogs = (type) => {
+  if (!logs.length) { toast.error('No logs to download'); return; }
+  
+  let csv = '';
+  if (type === 'booking') {
+    csv = 'Date,Customer,Email,Service,Amount,Status,Booked Via\n';
+    logs.forEach(l => {
+      csv += `"${new Date(l.createdAt).toLocaleDateString('en-IN')}","${l.user?.name || ''}","${l.user?.email || ''}","${l.service?.name || ''}","₹${l.totalAmount || 0}","${l.status || ''}","${l.bookedVia || 'website'}"\n`;
+    });
+  } else if (type === 'user') {
+    csv = 'Date,Name,Email,Phone,Role,Loyalty Points\n';
+    logs.forEach(l => {
+      csv += `"${new Date(l.createdAt).toLocaleDateString('en-IN')}","${l.name || ''}","${l.email || ''}","${l.phone || ''}","${l.role || ''}","${l.loyaltyPoints || 0}"\n`;
+    });
+  } else if (type === 'error' || type === 'app') {
+    csv = 'Timestamp,Level,Message,Details\n';
+    logs.forEach(l => {
+      csv += `"${new Date(l.timestamp).toLocaleString('en-IN')}","${l.level || ''}","${l.message || ''}","${l.details || ''}"\n`;
+    });
+  }
+
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `lakme_${type}_logs_${new Date().toISOString().split('T')[0]}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast.success(`${type} logs downloaded!`);
+};
 
   const openEdit = (s) => {
     setEditService(s);
@@ -273,6 +317,107 @@ export default function Admin() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+        {/* LOGS */}
+        {tab === 'Logs' && (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28, flexWrap: 'wrap', gap: 12 }}>
+              <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.4rem' }}>System Logs</h3>
+              <button
+                onClick={() => downloadLogs(logTab)}
+                style={{ background: 'linear-gradient(135deg, var(--gold), var(--gold-dark))', color: 'white', border: 'none', borderRadius: 8, padding: '10px 20px', fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+              >
+                ⬇ Download CSV
+              </button>
+            </div>
+
+            {/* Log category tabs */}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap' }}>
+              {[
+                { key: 'booking', label: '📊 Booking Logs', color: '#4A90D9' },
+                { key: 'user',    label: '👤 User Logs',    color: '#8B5CF6' },
+                { key: 'error',   label: '🔴 Error Logs',   color: '#C8003B' },
+                { key: 'app',     label: '⚙️ App Logs',     color: '#0F9B58' },
+              ].map(lt => (
+                <button
+                  key={lt.key}
+                  onClick={() => { setLogTab(lt.key); loadLogs(lt.key); }}
+                  style={{
+                    padding: '10px 20px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                    background: logTab === lt.key ? lt.color : 'white',
+                    color: logTab === lt.key ? 'white' : 'var(--text-secondary)',
+                    border: `1px solid ${logTab === lt.key ? lt.color : 'var(--border-light)'}`,
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  {lt.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Log content */}
+            <div style={{ background: 'white', borderRadius: 12, border: '1px solid var(--border-light)', overflow: 'auto' }}>
+              {logsLoading ? (
+                <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>Loading logs...</div>
+              ) : logs.length === 0 ? (
+                <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>
+                  Click a log category above to view logs
+                </div>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ background: 'var(--cream)' }}>
+                      {logTab === 'booking' && ['Date', 'Customer', 'Email', 'Service', 'Amount', 'Status'].map(h => (
+                        <th key={h} style={{ padding: '14px 16px', fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--text-muted)', textAlign: 'left', fontWeight: 500 }}>{h}</th>
+                      ))}
+                      {logTab === 'user' && ['Date', 'Name', 'Email', 'Phone', 'Role', 'Points'].map(h => (
+                        <th key={h} style={{ padding: '14px 16px', fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--text-muted)', textAlign: 'left', fontWeight: 500 }}>{h}</th>
+                      ))}
+                      {(logTab === 'error' || logTab === 'app') && ['Time', 'Level', 'Message', 'Details'].map(h => (
+                        <th key={h} style={{ padding: '14px 16px', fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--text-muted)', textAlign: 'left', fontWeight: 500 }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {logTab === 'booking' && logs.map((l, i) => (
+                      <tr key={i} style={{ borderTop: '1px solid var(--border-light)' }}>
+                        <td style={{ padding: '12px 16px', fontSize: 12 }}>{new Date(l.createdAt).toLocaleDateString('en-IN')}</td>
+                        <td style={{ padding: '12px 16px', fontSize: 13, fontWeight: 500 }}>{l.user?.name}</td>
+                        <td style={{ padding: '12px 16px', fontSize: 12, color: 'var(--text-secondary)' }}>{l.user?.email}</td>
+                        <td style={{ padding: '12px 16px', fontSize: 13 }}>{l.service?.name}</td>
+                        <td style={{ padding: '12px 16px', fontFamily: 'var(--font-display)', color: 'var(--gold)' }}>₹{l.totalAmount?.toLocaleString()}</td>
+                        <td style={{ padding: '12px 16px' }}>
+                          <span style={{ background: `${S_COLORS[l.status]}15`, color: S_COLORS[l.status], fontSize: 10, padding: '4px 8px', borderRadius: 50, fontWeight: 600 }}>{l.status}</span>
+                        </td>
+                      </tr>
+                    ))}
+                    {logTab === 'user' && logs.map((l, i) => (
+                      <tr key={i} style={{ borderTop: '1px solid var(--border-light)' }}>
+                        <td style={{ padding: '12px 16px', fontSize: 12 }}>{new Date(l.createdAt).toLocaleDateString('en-IN')}</td>
+                        <td style={{ padding: '12px 16px', fontSize: 13, fontWeight: 500 }}>{l.name}</td>
+                        <td style={{ padding: '12px 16px', fontSize: 12, color: 'var(--text-secondary)' }}>{l.email}</td>
+                        <td style={{ padding: '12px 16px', fontSize: 12 }}>{l.phone}</td>
+                        <td style={{ padding: '12px 16px' }}>
+                          <span style={{ background: l.role === 'admin' ? 'rgba(201,168,76,0.1)' : 'rgba(74,144,217,0.1)', color: l.role === 'admin' ? 'var(--gold)' : '#4A90D9', fontSize: 10, padding: '4px 8px', borderRadius: 50, fontWeight: 600 }}>{l.role}</span>
+                        </td>
+                        <td style={{ padding: '12px 16px', fontSize: 13, color: '#8B5CF6', fontWeight: 600 }}>{l.loyaltyPoints || 0} pts</td>
+                      </tr>
+                    ))}
+                    {(logTab === 'error' || logTab === 'app') && logs.map((l, i) => (
+                      <tr key={i} style={{ borderTop: '1px solid var(--border-light)' }}>
+                        <td style={{ padding: '12px 16px', fontSize: 11, color: 'var(--text-secondary)' }}>{new Date(l.timestamp).toLocaleString('en-IN')}</td>
+                        <td style={{ padding: '12px 16px' }}>
+                          <span style={{ background: l.level === 'error' ? 'rgba(200,0,59,0.1)' : 'rgba(15,155,88,0.1)', color: l.level === 'error' ? '#C8003B' : '#0F9B58', fontSize: 10, padding: '4px 8px', borderRadius: 50, fontWeight: 600 }}>{l.level}</span>
+                        </td>
+                        <td style={{ padding: '12px 16px', fontSize: 13 }}>{l.message}</td>
+                        <td style={{ padding: '12px 16px', fontSize: 11, color: 'var(--text-muted)', maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.details}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           </div>
         )}

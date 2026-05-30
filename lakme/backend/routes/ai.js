@@ -287,7 +287,7 @@ const analysis = completion.choices[0]?.message?.content;
 // Hairstyle recommendations without image
 router.post('/hairstyle-recommend', async (req, res) => {
   try {
-    const { faceShape, hairType, lifestyle, concerns, preferences } = req.body;
+    const { faceShape, hairType, lifestyle, concerns, preferences, length, occasion } = req.body;
 
     if (!faceShape && !hairType) {
       return res.status(400).json({ 
@@ -520,9 +520,8 @@ router.post('/voice-chat', async (req, res) => {
 });
 router.post('/voice-book', protect, async (req, res) => {
   try {
-    const { serviceName, date, timeSlot } = req.body;
+    const { serviceName, dateText, timeSlot } = req.body;
 
-    // Find service
     const service = await Service.findOne({
       name: { $regex: serviceName, $options: 'i' }
     });
@@ -530,98 +529,36 @@ router.post('/voice-book', protect, async (req, res) => {
       return res.json({ success: false, message: `Sorry, I couldn't find "${serviceName}". Available services include Hair Cut, Facial, Bridal Makeup, and more.` });
     }
 
-    // Create booking
-    const booking = await Booking.create({
-      user: req.user._id,
-      service: service._id,
-      date: new Date(date),
-      timeSlot,
-      stylist: 'Any Available',
-      totalAmount: service.price,
-      status: 'confirmed'
-    });
-
-    // Loyalty points
-    await User.findByIdAndUpdate(req.user._id, {
-      $inc: { loyaltyPoints: Math.floor(service.price / 10) },
-      $push: { bookingHistory: booking._id }
-    });
-
-    // Send confirmation email
-    if (process.env.EMAIL_USER) {
-      const nodemailer = require('nodemailer');
-      const transporter = nodemailer.createTransport({
-        host: process.env.EMAIL_HOST,
-        port: process.env.EMAIL_PORT,
-        auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS }
-      });
-      const userDoc = await User.findById(req.user._id);
-      await transporter.sendMail({
-        from: process.env.EMAIL_FROM,
-        to: userDoc.email,
-        subject: '✅ Voice Booking Confirmed — Lakmé Salon',
-        html: `<div style="font-family:Arial;max-width:500px;margin:auto;padding:20px">
-          <h2 style="color:#C9A84C">Booking Confirmed! 🎉</h2>
-          <p>Hi ${userDoc.name}, your voice booking is confirmed!</p>
-          <table style="width:100%;border-collapse:collapse;margin:20px 0">
-            <tr><td style="padding:8px;color:#999">Service</td><td style="padding:8px;font-weight:bold">${service.name}</td></tr>
-            <tr style="background:#f9f9f9"><td style="padding:8px;color:#999">Date</td><td style="padding:8px">${new Date(date).toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'})}</td></tr>
-            <tr><td style="padding:8px;color:#999">Time</td><td style="padding:8px">${timeSlot}</td></tr>
-            <tr style="background:#f9f9f9"><td style="padding:8px;color:#999">Amount</td><td style="padding:8px;color:#C9A84C;font-weight:bold">₹${service.price.toLocaleString()}</td></tr>
-          </table>
-          <p style="background:#FDF8F0;padding:12px;border-radius:8px;text-align:center">🌟 You earned ${Math.floor(service.price/10)} loyalty points!</p>
-          <p style="color:#999;font-size:12px;margin-top:20px">Lakmé Salon | +91 98765 43210</p>
-        </div>`
-      }).catch(e => console.log('Email error:', e.message));
-    }
-
-    res.json({
-      success: true,
-      message: `Your ${service.name} is booked for ${new Date(date).toLocaleDateString('en-IN', {day:'numeric', month:'long'})} at ${timeSlot}. A confirmation email has been sent to you!`
-    });
-
-  } catch (err) {
-    console.error('Voice book error:', err.message);
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
-router.post('/chat-book', protect, async (req, res) => {
-  try {
-    const { serviceName, dateText, timeSlot } = req.body;
-
-    // Find service fuzzy match
-    const service = await Service.findOne({
-      name: { $regex: serviceName.split(' ')[0], $options: 'i' }
-    });
-    if (!service) {
-      return res.json({ success: false, message: `Service "${serviceName}" not found. Please check our services page.` });
-    }
-
-    // Parse date
+    // Parse date properly
     let bookingDate = new Date();
-    const lower = dateText.toLowerCase();
+    const lower = (dateText || '').toLowerCase().trim();
     if (lower.includes('tomorrow')) {
       bookingDate.setDate(bookingDate.getDate() + 1);
+    } else if (lower.includes('today')) {
+      bookingDate = new Date();
     } else if (lower.includes('monday'))    { bookingDate = getNextDay(1); }
-    else if (lower.includes('tuesday'))  { bookingDate = getNextDay(2); }
-    else if (lower.includes('wednesday')){ bookingDate = getNextDay(3); }
-    else if (lower.includes('thursday')) { bookingDate = getNextDay(4); }
-    else if (lower.includes('friday'))   { bookingDate = getNextDay(5); }
-    else if (lower.includes('saturday')) { bookingDate = getNextDay(6); }
-    else if (lower.includes('sunday'))   { bookingDate = getNextDay(0); }
+    else if (lower.includes('tuesday'))     { bookingDate = getNextDay(2); }
+    else if (lower.includes('wednesday'))   { bookingDate = getNextDay(3); }
+    else if (lower.includes('thursday'))    { bookingDate = getNextDay(4); }
+    else if (lower.includes('friday'))      { bookingDate = getNextDay(5); }
+    else if (lower.includes('saturday'))    { bookingDate = getNextDay(6); }
+    else if (lower.includes('sunday'))      { bookingDate = getNextDay(0); }
     else {
-      // Try to parse date like "2nd June", "June 2"
-      const parsed = new Date(dateText);
-      if (!isNaN(parsed)) bookingDate = parsed;
+      const cleaned = (dateText || '').replace(/(st|nd|rd|th)/gi, '').trim();
+      const parsed = new Date(cleaned + ' 2026');
+      if (!isNaN(parsed.getTime())) bookingDate = parsed;
+      else { bookingDate.setDate(bookingDate.getDate() + 1); }
     }
+    bookingDate.setHours(12, 0, 0, 0);
 
-    // Normalize timeSlot — try to match to available slots
+    // Normalize time slot
     const TIME_SLOTS = ['09:00 AM','09:30 AM','10:00 AM','10:30 AM','11:00 AM','11:30 AM',
       '12:00 PM','12:30 PM','01:00 PM','02:00 PM','02:30 PM','03:00 PM',
       '03:30 PM','04:00 PM','04:30 PM','05:00 PM','05:30 PM','06:00 PM','06:30 PM','07:00 PM'];
-    
-    const matchedSlot = TIME_SLOTS.find(s => 
-      s.toLowerCase().includes(timeSlot.toLowerCase().replace(/\s/g,'').substring(0,4))
+    const matchedSlot = TIME_SLOTS.find(s =>
+      s.toLowerCase().replace(/\s/g,'').includes(
+        (timeSlot || '').toLowerCase().replace(/\s/g,'').substring(0,4)
+      )
     ) || timeSlot;
 
     // Create booking
@@ -642,20 +579,22 @@ router.post('/chat-book', protect, async (req, res) => {
     });
 
     // Send confirmation email
-    if (process.env.EMAIL_USER) {
+    try {
       const nodemailer = require('nodemailer');
       const transporter = nodemailer.createTransport({
-        host: process.env.EMAIL_HOST, port: process.env.EMAIL_PORT,
+        host: process.env.EMAIL_HOST,
+        port: Number(process.env.EMAIL_PORT),
+        secure: false,
         auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS }
       });
       const userDoc = await User.findById(req.user._id);
       await transporter.sendMail({
         from: process.env.EMAIL_FROM,
         to: userDoc.email,
-        subject: '✅ Booking Confirmed — Lakmé Salon',
+        subject: '✅ Voice Booking Confirmed — Lakmé Salon',
         html: `<div style="font-family:Arial;max-width:500px;margin:auto;padding:20px">
           <h2 style="color:#C9A84C">Booking Confirmed! 🎉</h2>
-          <p>Hi ${userDoc.name}, your chat booking is confirmed!</p>
+          <p>Hi ${userDoc.name}, your voice booking is confirmed!</p>
           <table style="width:100%;border-collapse:collapse;margin:20px 0">
             <tr><td style="padding:8px;color:#999">Service</td><td style="padding:8px;font-weight:bold">${service.name}</td></tr>
             <tr style="background:#f9f9f9"><td style="padding:8px;color:#999">Date</td><td style="padding:8px">${bookingDate.toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'})}</td></tr>
@@ -665,7 +604,105 @@ router.post('/chat-book', protect, async (req, res) => {
           <p style="background:#FDF8F0;padding:12px;border-radius:8px;text-align:center">🌟 You earned ${Math.floor(service.price/10)} loyalty points!</p>
           <p style="color:#999;font-size:12px">Lakmé Salon | +91 98765 43210</p>
         </div>`
-      }).catch(e => console.log('Email error:', e.message));
+      });
+      console.log('✅ Voice booking email sent to:', userDoc.email);
+    } catch(emailErr) {
+      console.error('❌ Email failed:', emailErr.message);
+    }
+
+    res.json({
+      success: true,
+      message: `${service.name} booked for ${bookingDate.toLocaleDateString('en-IN',{day:'numeric',month:'long'})} at ${matchedSlot} — ₹${service.price.toLocaleString()}`
+    });
+
+  } catch (err) {
+    console.error('Voice book error:', err.message);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+router.post('/chat-book', protect, async (req, res) => {
+  try {
+    const { serviceName, dateText, timeSlot } = req.body;
+
+    const service = await Service.findOne({
+      name: { $regex: serviceName.split(' ')[0], $options: 'i' }
+    });
+    if (!service) {
+      return res.json({ success: false, message: `Service "${serviceName}" not found.` });
+    }
+
+    let bookingDate = new Date();
+    const lower = (dateText || '').toLowerCase().trim();
+    if (lower.includes('tomorrow')) { bookingDate.setDate(bookingDate.getDate() + 1); }
+    else if (lower.includes('today')) { bookingDate = new Date(); }
+    else if (lower.includes('monday'))    { bookingDate = getNextDay(1); }
+    else if (lower.includes('tuesday'))   { bookingDate = getNextDay(2); }
+    else if (lower.includes('wednesday')) { bookingDate = getNextDay(3); }
+    else if (lower.includes('thursday'))  { bookingDate = getNextDay(4); }
+    else if (lower.includes('friday'))    { bookingDate = getNextDay(5); }
+    else if (lower.includes('saturday'))  { bookingDate = getNextDay(6); }
+    else if (lower.includes('sunday'))    { bookingDate = getNextDay(0); }
+    else {
+      const cleaned = (dateText || '').replace(/(st|nd|rd|th)/gi, '').trim();
+      const parsed = new Date(cleaned + ' 2026');
+      if (!isNaN(parsed.getTime())) bookingDate = parsed;
+      else bookingDate.setDate(bookingDate.getDate() + 1);
+    }
+    bookingDate.setHours(12, 0, 0, 0);
+
+    const TIME_SLOTS = ['09:00 AM','09:30 AM','10:00 AM','10:30 AM','11:00 AM','11:30 AM',
+      '12:00 PM','12:30 PM','01:00 PM','02:00 PM','02:30 PM','03:00 PM',
+      '03:30 PM','04:00 PM','04:30 PM','05:00 PM','05:30 PM','06:00 PM','06:30 PM','07:00 PM'];
+    const matchedSlot = TIME_SLOTS.find(s =>
+      s.toLowerCase().replace(/\s/g,'').includes(
+        (timeSlot || '').toLowerCase().replace(/\s/g,'').substring(0,4)
+      )
+    ) || timeSlot;
+
+    const booking = await Booking.create({
+      user: req.user._id,
+      service: service._id,
+      date: bookingDate,
+      timeSlot: matchedSlot,
+      stylist: 'Any Available',
+      totalAmount: service.price,
+      status: 'confirmed'
+    });
+
+    await User.findByIdAndUpdate(req.user._id, {
+      $inc: { loyaltyPoints: Math.floor(service.price / 10) },
+      $push: { bookingHistory: booking._id }
+    });
+
+    try {
+      const nodemailer = require('nodemailer');
+      const transporter = nodemailer.createTransport({
+        host: process.env.EMAIL_HOST,
+        port: Number(process.env.EMAIL_PORT),
+        secure: false,
+        auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS }
+      });
+      const userDoc = await User.findById(req.user._id);
+      await transporter.sendMail({
+        from: process.env.EMAIL_FROM,
+        to: userDoc.email,
+        subject: '✅ Booking Confirmed — Lakmé Salon',
+        html: `<div style="font-family:Arial;max-width:500px;margin:auto;padding:20px">
+          <h2 style="color:#C9A84C">Booking Confirmed! 🎉</h2>
+          <p>Hi ${userDoc.name}, your booking is confirmed!</p>
+          <table style="width:100%;border-collapse:collapse;margin:20px 0">
+            <tr><td style="padding:8px;color:#999">Service</td><td style="padding:8px;font-weight:bold">${service.name}</td></tr>
+            <tr style="background:#f9f9f9"><td style="padding:8px;color:#999">Date</td><td style="padding:8px">${bookingDate.toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'})}</td></tr>
+            <tr><td style="padding:8px;color:#999">Time</td><td style="padding:8px">${matchedSlot}</td></tr>
+            <tr style="background:#f9f9f9"><td style="padding:8px;color:#999">Amount</td><td style="padding:8px;color:#C9A84C;font-weight:bold">₹${service.price.toLocaleString()}</td></tr>
+          </table>
+          <p style="background:#FDF8F0;padding:12px;border-radius:8px;text-align:center">🌟 You earned ${Math.floor(service.price/10)} loyalty points!</p>
+          <p style="color:#999;font-size:12px">Lakmé Salon | +91 98765 43210</p>
+        </div>`
+      });
+      console.log('✅ Chat booking email sent to:', userDoc.email);
+    } catch(emailErr) {
+      console.error('❌ Email failed:', emailErr.message);
     }
 
     res.json({
@@ -678,7 +715,6 @@ router.post('/chat-book', protect, async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 });
-
 function getNextDay(dayIndex) {
   const today = new Date();
   const diff = (dayIndex - today.getDay() + 7) % 7 || 7;
