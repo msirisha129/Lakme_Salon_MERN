@@ -223,8 +223,16 @@ if (serviceMatch && timeMatch && dateMatch) {
       })
     });
     var data = await res.json();
-    var reply = (data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content)
-      || "I'm sorry, I couldn't understand that. Please try again!";
+
+    console.log("VOICE RESPONSE:", data);
+    console.log("VOICE RESPONSE JSON:", JSON.stringify(data, null, 2));
+
+    var reply = (data &&
+      data.choices &&
+      data.choices[0] &&
+      data.choices[0].message &&
+      data.choices[0].message.content)
+    || "I'm sorry, I couldn't understand that. Please try again!";
     addMessage('assistant', reply);
     speak(reply);
   } catch(e) {
