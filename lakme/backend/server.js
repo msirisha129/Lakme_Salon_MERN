@@ -11,12 +11,13 @@ dotenv.config();
 const app = express();
 
 // Middleware
+const cors = require('cors');
+
 app.use(cors({
   origin: [
     'http://localhost:3000',
-    'https://lakme-salon.up.railway.app',
-    process.env.CLIENT_URL
-  ].filter(Boolean),
+    'https://lakme-salon.up.railway.app'
+  ],
   credentials: true
 }));
 app.use(express.json({ limit: '10mb' }));
