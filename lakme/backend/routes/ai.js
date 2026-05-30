@@ -512,10 +512,15 @@ router.post('/voice-chat', async (req, res) => {
       max_tokens: 200,
       temperature: 0.7,
     });
+
     res.json(completion);
+
   } catch (err) {
-    console.error('Voice chat error:', err.message);
-    res.status(500).json({ error: err.message });
+    console.error('Voice chat error FULL:', err);
+
+    res.status(500).json({
+      error: err.message
+    });
   }
 });
 router.post('/voice-book', protect, async (req, res) => {
