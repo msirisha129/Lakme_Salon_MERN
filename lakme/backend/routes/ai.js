@@ -579,36 +579,18 @@ router.post('/voice-book', protect, async (req, res) => {
     });
 
     // Send confirmation email
-    try {
-      const nodemailer = require('nodemailer');
-      const transporter = nodemailer.createTransport({
-        host: process.env.EMAIL_HOST,
-        port: Number(process.env.EMAIL_PORT),
-        secure: false,
-        auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS }
-      });
-      const userDoc = await User.findById(req.user._id);
-      await transporter.sendMail({
-        from: process.env.EMAIL_FROM,
-        to: userDoc.email,
-        subject: '✅ Voice Booking Confirmed — Lakmé Salon',
-        html: `<div style="font-family:Arial;max-width:500px;margin:auto;padding:20px">
-          <h2 style="color:#C9A84C">Booking Confirmed! 🎉</h2>
-          <p>Hi ${userDoc.name}, your voice booking is confirmed!</p>
-          <table style="width:100%;border-collapse:collapse;margin:20px 0">
-            <tr><td style="padding:8px;color:#999">Service</td><td style="padding:8px;font-weight:bold">${service.name}</td></tr>
-            <tr style="background:#f9f9f9"><td style="padding:8px;color:#999">Date</td><td style="padding:8px">${bookingDate.toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'})}</td></tr>
-            <tr><td style="padding:8px;color:#999">Time</td><td style="padding:8px">${matchedSlot}</td></tr>
-            <tr style="background:#f9f9f9"><td style="padding:8px;color:#999">Amount</td><td style="padding:8px;color:#C9A84C;font-weight:bold">₹${service.price.toLocaleString()}</td></tr>
-          </table>
-          <p style="background:#FDF8F0;padding:12px;border-radius:8px;text-align:center">🌟 You earned ${Math.floor(service.price/10)} loyalty points!</p>
-          <p style="color:#999;font-size:12px">Lakmé Salon | +91 98765 43210</p>
-        </div>`
-      });
-      console.log('✅ Voice booking email sent to:', userDoc.email);
-    } catch(emailErr) {
-      console.error('❌ Email failed:', emailErr.message);
-    }
+    // Send confirmation email
+    const { sendBookingConfirmation } = require('../middleware/emailService');
+    const userDoc1 = await User.findById(req.user._id);
+    await sendBookingConfirmation({
+      toEmail: userDoc1.email,
+      toName: userDoc1.name,
+      serviceName: service.name,
+      date: bookingDate.toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'}),
+      timeSlot: matchedSlot,
+      amount: service.price.toLocaleString(),
+      loyaltyPoints: Math.floor(service.price / 10)
+    });
 
     res.json({
       success: true,
@@ -620,6 +602,7 @@ router.post('/voice-book', protect, async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 });
+
 router.post('/chat-book', protect, async (req, res) => {
   try {
     const { serviceName, dateText, timeSlot } = req.body;
@@ -674,36 +657,18 @@ router.post('/chat-book', protect, async (req, res) => {
       $push: { bookingHistory: booking._id }
     });
 
-    try {
-      const nodemailer = require('nodemailer');
-      const transporter = nodemailer.createTransport({
-        host: process.env.EMAIL_HOST,
-        port: Number(process.env.EMAIL_PORT),
-        secure: false,
-        auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS }
-      });
-      const userDoc = await User.findById(req.user._id);
-      await transporter.sendMail({
-        from: process.env.EMAIL_FROM,
-        to: userDoc.email,
-        subject: '✅ Booking Confirmed — Lakmé Salon',
-        html: `<div style="font-family:Arial;max-width:500px;margin:auto;padding:20px">
-          <h2 style="color:#C9A84C">Booking Confirmed! 🎉</h2>
-          <p>Hi ${userDoc.name}, your booking is confirmed!</p>
-          <table style="width:100%;border-collapse:collapse;margin:20px 0">
-            <tr><td style="padding:8px;color:#999">Service</td><td style="padding:8px;font-weight:bold">${service.name}</td></tr>
-            <tr style="background:#f9f9f9"><td style="padding:8px;color:#999">Date</td><td style="padding:8px">${bookingDate.toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'})}</td></tr>
-            <tr><td style="padding:8px;color:#999">Time</td><td style="padding:8px">${matchedSlot}</td></tr>
-            <tr style="background:#f9f9f9"><td style="padding:8px;color:#999">Amount</td><td style="padding:8px;color:#C9A84C;font-weight:bold">₹${service.price.toLocaleString()}</td></tr>
-          </table>
-          <p style="background:#FDF8F0;padding:12px;border-radius:8px;text-align:center">🌟 You earned ${Math.floor(service.price/10)} loyalty points!</p>
-          <p style="color:#999;font-size:12px">Lakmé Salon | +91 98765 43210</p>
-        </div>`
-      });
-      console.log('✅ Chat booking email sent to:', userDoc.email);
-    } catch(emailErr) {
-      console.error('❌ Email failed:', emailErr.message);
-    }
+    // Send confirmation email
+    const { sendBookingConfirmation: sendChatBookingEmail } = require('../middleware/emailService');
+    const userDoc2 = await User.findById(req.user._id);
+    await sendChatBookingEmail({
+      toEmail: userDoc2.email,
+      toName: userDoc2.name,
+      serviceName: service.name,
+      date: bookingDate.toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'}),
+      timeSlot: matchedSlot,
+      amount: service.price.toLocaleString(),
+      loyaltyPoints: Math.floor(service.price / 10)
+    });
 
     res.json({
       success: true,
@@ -715,10 +680,12 @@ router.post('/chat-book', protect, async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 });
+
 function getNextDay(dayIndex) {
   const today = new Date();
   const diff = (dayIndex - today.getDay() + 7) % 7 || 7;
   today.setDate(today.getDate() + diff);
   return today;
 }
+
 module.exports = router;

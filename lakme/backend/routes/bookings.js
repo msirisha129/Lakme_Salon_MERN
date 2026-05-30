@@ -46,32 +46,17 @@ router.post('/', protect, async (req, res) => {
     });
 
    // Send booking confirmation email
-if (process.env.EMAIL_USER) {
-  const nodemailer = require('nodemailer');
-  const transporter = nodemailer.createTransport({
-    host: process.env.EMAIL_HOST, port: process.env.EMAIL_PORT,
-    auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS }
-  });
-  const userDoc = await User.findById(req.user._id);
-  await transporter.sendMail({
-    from: process.env.EMAIL_FROM,
-    to: userDoc.email,
-    subject: '✅ Booking Confirmed — Lakmé Salon',
-    html: `<div style="font-family:Arial;max-width:500px;margin:auto;padding:20px">
-      <h2 style="color:#C9A84C">Booking Confirmed! 🎉</h2>
-      <p>Hi ${userDoc.name}, your appointment is booked!</p>
-      <table style="width:100%;border-collapse:collapse;margin:20px 0">
-        <tr><td style="padding:8px;color:#999">Service</td><td style="padding:8px;font-weight:bold">${service.name}</td></tr>
-        <tr style="background:#f9f9f9"><td style="padding:8px;color:#999">Date</td><td style="padding:8px">${new Date(date).toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'})}</td></tr>
-        <tr><td style="padding:8px;color:#999">Time</td><td style="padding:8px">${timeSlot}</td></tr>
-        <tr style="background:#f9f9f9"><td style="padding:8px;color:#999">Amount</td><td style="padding:8px;color:#C9A84C;font-weight:bold">₹${service.price.toLocaleString()}</td></tr>
-      </table>
-      <p style="background:#FDF8F0;padding:12px;border-radius:8px;text-align:center">🌟 You earned ${Math.floor(service.price/10)} loyalty points!</p>
-      <p style="color:#999;font-size:12px;margin-top:20px">Lakmé Salon | +91 98765 43210</p>
-    </div>`
-  }).catch(e => console.log('Email error:', e.message));
-}
-   
+const { sendBookingConfirmation } = require('../middleware/emailService');
+const userDoc = await User.findById(req.user._id);
+await sendBookingConfirmation({
+  toEmail: userDoc.email,
+  toName: userDoc.name,
+  serviceName: service.name,
+  date: new Date(date).toLocaleDateString('en-IN', {weekday:'long', day:'numeric', month:'long'}),
+  timeSlot,
+  amount: service.price.toLocaleString(),
+  loyaltyPoints: Math.floor(service.price / 10)
+});
    
    
     const populated = await Booking.findById(booking._id).populate('service', 'name price duration category');
