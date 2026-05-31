@@ -286,7 +286,7 @@ if (serviceMatch && timeMatch && dateMatch) {
         setTranscript('');
         addMessage('user', t);
         askGroq(t);
-      }, 600);                   // ← FIX 3: 600ms grace period after final
+      }, 5000);                 // ← FIX 3: 600ms grace period after final
     } else {
       // Interim — show live transcript, reset silence window
       silenceTimer = setTimeout(function() {
@@ -297,7 +297,7 @@ if (serviceMatch && timeMatch && dateMatch) {
           addMessage('user', t);
           askGroq(t);
         }
-      }, 2500);                  // ← FIX 4: 2.5s silence = done speaking
+      }, 5000);              // ← FIX 4: 2.5s silence = done speaking
     }
   };
 
