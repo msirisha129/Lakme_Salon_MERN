@@ -211,6 +211,8 @@ if (serviceMatch && timeMatch && dateMatch) {
 
   // Normal AI chat
   try {
+    console.log("VOICE URL:", '/api/ai/voice-chat');
+
     var res = await fetch('/api/ai/voice-chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -223,6 +225,7 @@ if (serviceMatch && timeMatch && dateMatch) {
       })
     });
     var data = await res.json();
+    
 
     console.log("VOICE RESPONSE:", data);
     console.log("VOICE RESPONSE JSON:", JSON.stringify(data, null, 2));
