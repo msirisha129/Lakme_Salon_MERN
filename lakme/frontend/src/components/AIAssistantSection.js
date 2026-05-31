@@ -212,8 +212,11 @@ if (serviceMatch && timeMatch && dateMatch) {
   // Normal AI chat
   try {
     console.log("VOICE URL:", '/api/ai/voice-chat');
+    console.log("API URL =", process.env.REACT_APP_API_URL);
 
-    var res = await fetch('/api/ai/voice-chat', {
+    var res = await fetch(
+  `${process.env.REACT_APP_API_URL}/ai/voice-chat`,
+  {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
