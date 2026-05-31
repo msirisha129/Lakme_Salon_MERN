@@ -214,8 +214,8 @@ if (serviceMatch && timeMatch && dateMatch) {
     console.log("VOICE URL:", '/api/ai/voice-chat');
     console.log("API URL =", process.env.REACT_APP_API_URL);
 
-    var res = await fetch(
-  `${process.env.REACT_APP_API_URL}/ai/voice-chat`,
+   var res = await fetch(
+  'https://ample-delight-production-8d2c.up.railway.app/api/ai/voice-chat',
   {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
