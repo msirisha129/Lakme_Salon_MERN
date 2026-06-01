@@ -787,20 +787,35 @@ router.post('/voice-book', protect, async (req, res) => {
       $push: { bookingHistory: booking._id }
     });
 
+   
     // Send confirmation email
     // Send confirmation email
-    const { sendBookingConfirmation } = require('../middleware/emailService');
-    const userDoc1 = await User.findById(req.user._id);
-    await sendBookingConfirmation({
-      toEmail: userDoc1.email,
-      toName: userDoc1.name,
-      serviceName: service.name,
-      date: bookingDate.toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'}),
-      timeSlot: matchedSlot,
-      amount: service.price.toLocaleString(),
-      loyaltyPoints: Math.floor(service.price / 10)
-    });
+const { sendBookingConfirmation } = require('../middleware/emailService');
+const userDoc1 = await User.findById(req.user._id);
 
+console.log("========== VOICE BOOK DEBUG ==========");
+console.log("VOICE USER:", userDoc1.name);
+console.log("VOICE EMAIL:", userDoc1.email);
+console.log("SERVICE:", service.name);
+console.log("DATE:", bookingDate);
+console.log("TIME:", matchedSlot);
+
+const emailResult = await sendBookingConfirmation({
+  toEmail: userDoc1.email,
+  toName: userDoc1.name,
+  serviceName: service.name,
+  date: bookingDate.toLocaleDateString('en-IN', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long'
+  }),
+  timeSlot: matchedSlot,
+  amount: service.price.toLocaleString(),
+  loyaltyPoints: Math.floor(service.price / 10)
+});
+
+console.log("EMAIL RESULT:", emailResult);
+console.log("=====================================");
     res.json({
       success: true,
       message: `${service.name} booked for ${bookingDate.toLocaleDateString('en-IN',{day:'numeric',month:'long'})} at ${matchedSlot} — ₹${service.price.toLocaleString()}`
