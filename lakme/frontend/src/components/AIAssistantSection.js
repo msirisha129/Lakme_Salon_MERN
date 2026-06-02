@@ -297,24 +297,42 @@ if (serviceMatch && timeMatch && dateMatch) {
           addMessage('user', t);
           askGroq(t);
         }
-      }, 5000);              // ← FIX 4: 2.5s silence = done speaking
+      }, 2000);              // ← FIX 4: 2.5s silence = done speaking
     }
   };
 
   r.onerror = function(e) {
-    if (e.error === 'no-speech') {
-      // Don't show error for no-speech, just restart quietly
-      setStatusText('Listening… speak now');
-      return;
-    }
-    setPhase('idle');
-    setStatusText('Could not hear you – tap mic to try again');
-  };
 
-  r.onend = function() {
-    if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
-    setPhase(function(p) { return p === 'listening' ? 'idle' : p; });
-  };
+  console.log('Speech error:', e.error);
+
+  if (
+    e.error === 'no-speech' ||
+    e.error === 'audio-capture' ||
+    e.error === 'network'
+  ) {
+    return;
+  }
+
+  setPhase('idle');
+};
+
+ r.onend = function() {
+
+  if (silenceTimer) {
+    clearTimeout(silenceTimer);
+    silenceTimer = null;
+  }
+
+  // Restart automatically if still listening
+  if (phase === 'listening') {
+    try {
+      r.start();
+    } catch (e) {}
+    return;
+  }
+
+  setPhase('idle');
+};
 
   recognitionRef.current = r;
   r.start();
@@ -352,25 +370,28 @@ if (serviceMatch && timeMatch && dateMatch) {
         ),
         React.createElement('button', { onClick: onClose, style: styles.vmClose }, '✕')
       ),
-      // Messages
-      React.createElement(
-        'div',
-        { style: styles.vmMessages },
-        messages.map(function(m) {
-          return React.createElement(
-            'div',
-            {
-              key: m.id,
-              style: Object.assign({}, styles.vmBubble, m.role === 'user' ? styles.vmBubbleUser : styles.vmBubbleBot)
-            },
-            m.text
-          );
-        }),
-        transcript
-          ? React.createElement('div', { style: Object.assign({}, styles.vmBubble, styles.vmBubbleUser, { opacity: 0.6 }) }, transcript + '…')
-          : null,
-        React.createElement('div', { ref: messagesEndRef })
-      ),
+     // Voice Status Area (Hidden Chat)
+React.createElement(
+  'div',
+  {
+    style: {
+      minHeight: '120px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      color: '#c9a84c',
+      fontSize: '18px',
+      fontFamily: "'Montserrat', sans-serif"
+    }
+  },
+  phase === 'listening'
+    ? '🎙 Listening...'
+    : phase === 'thinking'
+    ? '✨ Thinking...'
+    : phase === 'speaking'
+    ? '🔊 Speaking...'
+    : 'Tap the microphone to begin'
+),
       // Mic Area
       React.createElement(
         'div',
