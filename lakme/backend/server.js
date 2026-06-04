@@ -35,6 +35,14 @@ app.use('/api/admin', require('./routes/admin'));
 // Health check
 app.get('/api/health', (req, res) => res.json({ status: 'OK', message: 'Lakme API running' }));
 
+// metrics error handler: log unhandled server errors
+const metrics = require('./middleware/metrics');
+app.use((err, req, res, next) => {
+  console.error('Unhandled server error:', err && err.message);
+  try { metrics.increment('server.error', { route: req.originalUrl, message: err && err.message }); } catch (e) { console.warn('Metrics error', e); }
+  if (!res.headersSent) res.status(500).json({ success: false, message: 'Internal server error' });
+});
+
 // Connect MongoDB
 const connectDB = async () => {
   try {

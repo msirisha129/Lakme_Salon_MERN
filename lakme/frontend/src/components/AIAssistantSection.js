@@ -22,6 +22,7 @@ function VoiceAssistantModal({ onClose }) {
     time: null
   });
   const [bookingStep, setBookingStep] = React.useState(null);
+  const [alternativeSlots, setAlternativeSlots] = React.useState([]);
 
   const phaseRef = React.useRef('idle');
   const srRef = React.useRef(null);
@@ -39,6 +40,7 @@ function VoiceAssistantModal({ onClose }) {
   const bookingDataRef = React.useRef(bookingData);
   const bookingStepRef = React.useRef(bookingStep);
   const lastProcessedTextRef = React.useRef('');
+  const lastProcessedAtRef = React.useRef(0);
 
   function updateBookingData(patch) {
     setBookingData(prev => {
@@ -80,7 +82,7 @@ function VoiceAssistantModal({ onClose }) {
     }
 
     var t = setTimeout(() => {
-      var g = "Hello! Welcome to Lakmé Salon. How can I help you today? You can ask about services, book an appointment, or get beauty advice.";
+      var g = "Hello! Welcome to Lakmé Salon. How can I help you today?";
       addMessage('assistant', g);
       console.log('Initial greeting generated.');
       speakGroq(g);
@@ -291,6 +293,29 @@ function VoiceAssistantModal({ onClose }) {
     return digits.length === 10;
   }
 
+  // Try to extract a name phrase from a longer user sentence
+  function extractNameFromText(text) {
+    if (!text) return '';
+    const lower = text.toLowerCase();
+    // common name-introducing phrases
+    const patterns = [ /my name is\s+(.+)/i, /name is\s+(.+)/i, /i am\s+(.+)/i, /i'm\s+(.+)/i, /this is\s+(.+)/i ];
+    for (const p of patterns) {
+      const m = text.match(p);
+      if (m && m[1]) {
+        // take first 2 words from the match, strip trailing filler like 'help', 'register', etc.
+        let candidate = m[1].trim();
+        candidate = candidate.replace(/\b(help|please|register|with register|to register|help me)\b.*/i, '').trim();
+        const parts = candidate.split(/\s+/).filter(Boolean);
+        if (parts.length >= 1) return parts.slice(0, 2).join(' ');
+      }
+    }
+    // fallback: if sentence short, return it as-is (trim to two words)
+    const parts = text.replace(/\b(help me|help|please|with register|register)\b/gi, '').trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 1) return parts[0];
+    if (parts.length >= 2 && parts.length <= 4) return parts.slice(0, 2).join(' ');
+    return '';
+  }
+
   // ── Browser Web Speech API (TTS) ────────────────────────────────────────
   function speakGroq(text) {
     console.log('Generating speech for AI response...');
@@ -378,6 +403,11 @@ function VoiceAssistantModal({ onClose }) {
     // Time availability inquiry
     if (/available|when|free|slots|opening/i.test(lower)) {
       return 'availability_inquiry';
+    }
+
+    // Register / signup intent
+    if (/register|sign up|signup|create account|sign me up|help me register|help me with register|i want to register|i want to sign up|sign me up please/i.test(lower)) {
+      return 'register';
     }
     
     return 'normal';
@@ -499,6 +529,22 @@ function VoiceAssistantModal({ onClose }) {
     // ── TIER 2: Intent Detection ──
     const intent = detectIntent(userText);
     console.log('[TIER2] Detected intent:', intent);
+
+    // If user asked to register outside booking flow, start the collectName flow
+    if (intent === 'register' && !step) {
+      setBookingStep('collectName');
+      const prompt = 'Sure — I can help you register. What is your full name?';
+      addMessage('assistant', prompt);
+      speakGroq(prompt);
+      // ensure mic permission then resume listening after TTS finishes
+      (async () => {
+        try {
+          const ok = await ensureMicPermission();
+          if (ok) setTimeout(() => { try { startListening(); } catch (e) {} }, 1400);
+        } catch (e) { console.warn('ensureMicPermission failed', e); }
+      })();
+      return;
+    }
     
     // Handle cancellation
     if (intent === 'cancel') {
@@ -633,7 +679,7 @@ function VoiceAssistantModal({ onClose }) {
       console.log('Service received:', serviceConfirm, 'asking for date.');
       setBookingStep('askDate');
       
-      var confirmService = `${ack} You want a ${serviceConfirm}. When would you like to come? Please say: today, tomorrow, or a day like Monday, Tuesday, etc.`;
+      var confirmService = `${ack} You want a ${serviceConfirm}. When would you like to come? Say today, tomorrow or a weekday.`;
       addMessage('assistant', confirmService);
       speakGroq(confirmService);
       return;
@@ -673,14 +719,14 @@ function VoiceAssistantModal({ onClose }) {
       // ── TIER 2: Add acknowledgment ──
       var ack3 = getAcknowledgment();
       
-      // If user not logged in, ask for email to allow guest booking
+      // If user not logged in, collect name & phone then redirect to register
       var tokenCheck = localStorage.getItem('lakme_token');
       if (!tokenCheck) {
-        setBookingStep('askEmail');
-        console.log('User not logged in, asking for email for guest booking.');
-        var askEmailMsg = `${ack3} Please provide your email address so we can send a confirmation.`;
-        addMessage('assistant', askEmailMsg);
-        speakGroq(askEmailMsg);
+        setBookingStep('collectName');
+        console.log('User not logged in, asking for name to start registration flow.');
+        var askNameMsg = `${ack3} I can help you register so we can complete the booking. What is your full name?`;
+        addMessage('assistant', askNameMsg);
+        speakGroq(askNameMsg);
         return;
       }
       
@@ -690,6 +736,35 @@ function VoiceAssistantModal({ onClose }) {
       var confirmMsg = `${ack3} Let me confirm your booking:\n\nName: ${data.name}\nPhone: ${data.phone}\nService: ${data.service}\nDate: ${data.date}\nTime: ${time}\n\nDoes this look correct? Please say yes or no.`;
       addMessage('assistant', confirmMsg);
       speakGroq(confirmMsg);
+      return;
+    }
+
+    // If user is choosing an alternative slot offered by the assistant
+    if (step === 'chooseAlternative') {
+      if (/^\s*(yes|yeah|yep|ok|okay|confirm)\b/i.test(userText)) {
+        // user accepted first alternative
+        const choice = alternativeSlots && alternativeSlots.length > 0 ? alternativeSlots[0] : null;
+        if (choice) {
+          updateBookingData({ time: choice });
+          // continue to submit booking as if user confirmed
+          setBookingStep('confirm');
+          // trigger confirmation flow by re-invoking processBookingResponse with 'yes'
+          await processBookingResponse('yes');
+          return;
+        }
+      }
+      // If user stated a specific time, accept that if it matches an alternative
+      const matched = (alternativeSlots || []).find(s => s.toLowerCase().includes((userText||'').toLowerCase().substring(0,4)));
+      if (matched) {
+        updateBookingData({ time: matched });
+        setBookingStep('confirm');
+        await processBookingResponse('yes');
+        return;
+      }
+      // otherwise ask to clarify
+      const clar = 'I did not understand that selection. Please say one of the available times.';
+      addMessage('assistant', clar);
+      speakGroq(clar);
       return;
     }
 
@@ -710,6 +785,69 @@ function VoiceAssistantModal({ onClose }) {
       var confirmMsg2 = `Let me confirm your booking:\n\nName: ${data2.name}\nPhone: ${data2.phone}\nService: ${data2.service}\nDate: ${data2.date}\nTime: ${data2.time}\nEmail: ${email}\n\nDoes this look correct? Please say yes or no.`;
       addMessage('assistant', confirmMsg2);
       speakGroq(confirmMsg2);
+      return;
+    }
+
+    // ── Collect name/phone to prefill registration when user is not signed in ──
+    if (step === 'collectName') {
+      console.log('[DEBUG] in collectName, raw:', userText);
+      // attempt to extract a concise name from longer utterances
+      var nameText = extractNameFromText(userText) || userText.trim();
+      if (!nameText || nameText.length < 2) {
+        addMessage('assistant', 'Please tell me your full name so I can start registration.');
+        speakGroq('Please tell me your full name so I can start registration.');
+        return;
+      }
+      // Ask for confirmation of the recognized name to handle mis-hearings
+      updateBookingData({ name: nameText });
+      setBookingStep('confirmName');
+      const heard = `I heard ${nameText}. Is that correct? Please say yes or no.`;
+      addMessage('assistant', heard);
+      speakGroq(heard);
+      return;
+    }
+
+    // Confirm captured name
+    if (step === 'confirmName') {
+      console.log('[DEBUG] in confirmName, raw:', userText, 'recognized name:', bookingDataRef.current.name);
+      if (/^\s*(yes|yeah|yep|correct|that is correct|right)\b/i.test(userText)) {
+        setBookingStep('collectPhone');
+        const first = (bookingDataRef.current.name || '').split(' ')[0] || '';
+        addMessage('assistant', `Thanks ${first}. Now please provide your phone number.`);
+        speakGroq('Thanks. Now please provide your phone number.');
+        return;
+      }
+      if (/^\s*(no|incorrect|not|wrong|repeat)\b/i.test(userText)) {
+        console.log('[DEBUG] user rejected name');
+        setBookingStep('collectName');
+        addMessage('assistant', 'Sorry about that. Please say your full name again, slowly.');
+        speakGroq('Sorry about that. Please say your full name again, slowly.');
+        return;
+      }
+      // If unclear, re-prompt
+      addMessage('assistant', 'Please say yes if the name is correct, or no to repeat it.');
+      speakGroq('Please say yes if the name is correct, or no to repeat it.');
+      return;
+    }
+
+    if (step === 'collectPhone') {
+      var phoneText = userText.replace(/[^0-9+]/g, '').trim();
+      if (!isValidPhone(phoneText)) {
+        addMessage('assistant', 'That phone number does not look right. Please say a 10-digit phone number.');
+        speakGroq('That phone number does not look right. Please say a 10-digit phone number.');
+        return;
+      }
+      updateBookingData({ phone: phoneText });
+      // Persist prefill for register page and redirect user there to complete email/password
+      try {
+        const pre = { name: bookingDataRef.current.name || '', phone: phoneText, draft: bookingDataRef.current };
+        localStorage.setItem('lakme_pre_register', JSON.stringify(pre));
+      } catch (e) { console.warn('Failed to save pre-register info', e); }
+      addMessage('assistant', 'Great — I have your details. I will open the registration page for you to set email and password.');
+      speakGroq('Great — I have your details. I will open the registration page for you to set email and password.');
+      // give TTS time to start then redirect
+      setTimeout(() => { window.location.href = '/register'; }, 1200);
+      setBookingStep(null);
       return;
     }
 
@@ -794,9 +932,49 @@ function VoiceAssistantModal({ onClose }) {
         } catch (e) {
           console.error('Booking fetch error:', e);
           console.log('Booking conversation complete.');
-          var errorMsg = "There was an error completing your booking. Please try again later.";
-          addMessage('assistant', errorMsg);
-          speakGroq(errorMsg);
+          const serverMsg = e?.response?.data?.message || e?.serverMessage || e?.message || 'There was an error completing your booking. Please try again later.';
+          // If backend returned alternative slots, offer them to the user
+          const alternatives = e?.response?.data?.alternatives || null;
+          // If server returned 409 (just booked), fetch live available slots and offer them
+          if (e?.response?.status === 409) {
+            try {
+              const dateQuery = bookingDataRef.current.date || bookingDataRef.current.dateText || 'tomorrow';
+              const slotsResp = await API.get(`/bookings/slots?date=${encodeURIComponent(dateQuery)}`);
+              const live = slotsResp?.data?.data || [];
+              if (live && live.length > 0) {
+                const altText2 = `That slot was just taken. Available slots are: ${live.slice(0,4).join(', ')}. Which one would you prefer?`;
+                addMessage('assistant', altText2);
+                speakGroq(altText2);
+                setAlternativeSlots(live.slice(0,4));
+                setBookingStep('chooseAlternative');
+                setStatusText('Choose an alternative slot');
+                return;
+              }
+            } catch (errSlots) { console.warn('Failed to fetch live slots', errSlots); }
+          }
+          if (alternatives && alternatives.length > 0) {
+            const altText = `That slot is taken. Available alternatives are: ${alternatives.slice(0,3).join(', ')}. Which one would you prefer?`;
+            addMessage('assistant', altText);
+            speakGroq(altText);
+            setAlternativeSlots(alternatives.slice(0,3));
+            setBookingStep('chooseAlternative');
+            setStatusText('Choose an alternative slot');
+            return;
+          }
+
+          // Handle reCAPTCHA or forbidden responses with clear guidance
+          if (e?.response?.status === 403 || /recaptcha/i.test(serverMsg)) {
+            const rcMsg = 'I could not verify that you are human. Please complete the captcha on the booking page or try again from the website. I can also open the booking page for you.';
+            addMessage('assistant', rcMsg);
+            speakGroq(rcMsg);
+            setShowManualSend(true);
+            setBookingStep(null);
+            setStatusText('reCAPTCHA required');
+            return;
+          }
+
+          addMessage('assistant', serverMsg);
+          speakGroq(serverMsg);
           setBookingStep(null);
           setStatusText('Tap mic to speak');
         }
@@ -1027,6 +1205,18 @@ function VoiceAssistantModal({ onClose }) {
 
   async function processSpeech(text) {
     console.log('Transcript received:', text);
+    // Dedupe: ignore immediate repeated transcripts (common with continuous SR)
+    try {
+      const now = Date.now();
+      if (text && lastProcessedTextRef.current && text.trim().toLowerCase() === lastProcessedTextRef.current.trim().toLowerCase()) {
+        if (now - (lastProcessedAtRef.current || 0) < 3000) {
+          console.log('Duplicate transcript ignored:', text);
+          return;
+        }
+      }
+      lastProcessedTextRef.current = text;
+      lastProcessedAtRef.current = now;
+    } catch (e) { }
     // Allow short confirmations (yes/no) during booking confirm step even if short
     const isConfirmShort = bookingStepRef.current === 'confirm' && /\b(yes|no|yeah|yep|yup|sure|confirm|ok|okay)\b/i.test(text);
     if ((text.length > 3 && hasLoudSpeechRef.current) || isConfirmShort) {
@@ -1039,6 +1229,19 @@ function VoiceAssistantModal({ onClose }) {
         await processBookingResponse(text);
       } else if (/book|appointment|reserve/i.test(text)) {
         startBookingFlow();
+      } else if (/register|sign up|signup|create account|sign me up|help me register|help me with register|i want to register|i want to sign up|sign me up please/i.test(text)) {
+        // Directly handle register phrases locally to avoid network calls
+        setBookingStep('collectName');
+        const prompt = 'Sure — I can help you register. What is your full name?';
+        addMessage('assistant', prompt);
+        speakGroq(prompt);
+        (async () => {
+          try {
+            const ok = await ensureMicPermission();
+            if (ok) setTimeout(() => { try { startListening(); } catch(e) {} }, 1200);
+          } catch (e) { console.warn('ensureMicPermission failed', e); }
+        })();
+        return;
       } else {
         await askGroq(text);
       }
@@ -1127,6 +1330,24 @@ function VoiceAssistantModal({ onClose }) {
 
   // ── Groq LLM (for general questions) ──────────────────────────────────────
   async function askGroq(userText) {
+    // Quick canned replies for greetings / short chit-chat to avoid hitting LLM
+    const canned = {
+      hi: 'Hi! How can I help you today?',
+      hello: 'Hello! Looking to book or need styling advice?',
+      hey: 'Hey there — would you like to book an appointment or chat about styles?',
+      thanks: "You're welcome! Anything else I can do?",
+      'thank you': "You're welcome! Anything else I can do?"
+    };
+    const clean = userText.trim().toLowerCase();
+    if (clean.length <= 20) {
+      const key = canned[clean] ? clean : (clean.replace(/[!.,?]/g,'') in canned ? clean.replace(/[!.,?]/g,'') : null);
+      if (key || /^(hi|hello|hey|hlo|thanks|thank you)$/.test(clean)) {
+        const reply = canned[key] || 'Hi! How can I help you today?';
+      addMessage('assistant', reply);
+      speakGroq(reply);
+      return;
+    }
+    }
     setPhase('thinking'); phaseRef.current = 'thinking';
     setStatusText('Thinking…');
     console.log('Sending to AI (general question):', userText);
@@ -1184,6 +1405,24 @@ function VoiceAssistantModal({ onClose }) {
   function sendManualText() {
     const text = manualTextInput.trim();
     if (!text) return;
+    // If assistant is currently asking for a date, validate and block past dates locally
+    if (bookingStepRef.current === 'askDate') {
+      const parsed = isValidDate(text);
+      if (!parsed) {
+        const msg = "I didn't understand that date. Please say today, tomorrow, or a weekday like Monday.";
+        addMessage('assistant', msg);
+        speakGroq(msg);
+        setManualTextInput('');
+        return;
+      }
+      if (isPastDate(parsed)) {
+        const msg = 'That date has already passed. Please choose today, tomorrow, or a future date.';
+        addMessage('assistant', msg);
+        speakGroq(msg);
+        setManualTextInput('');
+        return;
+      }
+    }
     addMessage('user', text);
     setManualTextInput('');
     setShowManualSend(false);
@@ -1217,6 +1456,22 @@ function VoiceAssistantModal({ onClose }) {
           'Ready to help'
         )
       ),
+      // Alternative slots tappable UI
+      alternativeSlots && alternativeSlots.length > 0 ? React.createElement('div', { style: styles.alternativesWrap },
+        React.createElement('div', { style: styles.alternativesLabel }, 'Available alternatives'),
+        React.createElement('div', { style: styles.alternativesList },
+          alternativeSlots.map((s, idx) => React.createElement('button', {
+            key: s + idx,
+            style: styles.alternativeBtn,
+            onClick: async () => {
+              updateBookingData({ time: s });
+              setBookingStep('confirm');
+              setAlternativeSlots([]);
+              try { await processBookingResponse('yes'); } catch(e){ console.warn('Alt select error', e); }
+            }
+          }, s))
+        )
+      ) : null,
       React.createElement('div', { style: styles.vmMicArea },
         // Visual Sound Wave
         React.createElement('div', { style: styles.waveContainer },
@@ -1524,6 +1779,10 @@ var styles = {
   },
   vmManualSendBtn: { background: 'rgba(74,144,217,0.1)', border: '1px solid rgba(74,144,217,0.3)', color: '#4A90D9', padding: '8px 20px', borderRadius: '50px', fontSize: '11px', cursor: 'pointer', fontFamily: 'Montserrat', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '1px', marginTop: '10px' },
   vmEndBtn: { background: 'rgba(255,107,107,0.1)', border: '1px solid rgba(255,107,107,0.3)', color: '#ff6b6b', padding: '8px 20px', borderRadius: '50px', fontSize: '11px', cursor: 'pointer', fontFamily: 'Montserrat', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '1px', marginTop: '10px' },
+  alternativesWrap: { padding: '10px 16px', display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center', background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid rgba(255,255,255,0.02)' },
+  alternativesLabel: { fontSize: 12, color: '#c9a84c', fontWeight: 700, letterSpacing: '0.06em' },
+  alternativesList: { display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center', marginTop: 6 },
+  alternativeBtn: { padding: '8px 12px', background: 'transparent', border: '1px solid rgba(201,168,76,0.25)', color: '#f5f0e8', borderRadius: 6, cursor: 'pointer', fontSize: 13 }
 };
 
 export default AIAssistantSection;

@@ -47,6 +47,10 @@ export default function Booking() {
 
   const handleSubmit = async () => {
     if (!user) { navigate('/login?redirect=/booking'); return; }
+    // Validate client-side to avoid past-date bookings or missing fields
+    if (!form.date) { toast.error('Please select a date'); return; }
+    if (!form.timeSlot) { toast.error('Please select a time slot'); return; }
+    if (form.date < today) { toast.error('Cannot book past dates'); return; }
     setLoading(true);
     try {
       const { data } = await API.post('/bookings', form);
@@ -157,7 +161,15 @@ export default function Booking() {
               <div>
                 <label className="form-label"><Calendar size={12} style={{ display: 'inline', marginRight: 6 }} />Select Date</label>
                 <input type="date" className="form-input" min={today} max={maxDate} value={form.date}
-                  onChange={e => setForm(f => ({ ...f, date: e.target.value, timeSlot: '' }))} />
+                  onChange={e => {
+                    const val = e.target.value;
+                    if (val && val < today) {
+                      toast.error('Please select today or a future date');
+                      setForm(f => ({ ...f, date: today, timeSlot: '' }));
+                    } else {
+                      setForm(f => ({ ...f, date: val, timeSlot: '' }));
+                    }
+                  }} />
               </div>
               <div>
                 <label className="form-label">Preferred Stylist (Optional)</label>

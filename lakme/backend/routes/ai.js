@@ -143,6 +143,8 @@ try {
 
 // In-memory fallback
 const guestRateLimitMap = new Map();
+const metrics = require('../middleware/metrics');
+
 async function guestRateLimiter(req, res, next) {
   const ip = req.ip || req.headers['x-forwarded-for'] || req.connection?.remoteAddress || 'unknown';
   const max = Number(process.env.GUEST_BOOKING_MAX || 5);
@@ -153,6 +155,7 @@ async function guestRateLimiter(req, res, next) {
       await rateLimiterRedis.consume(ip);
       return next();
     } catch (rejRes) {
+      metrics.increment('rate_limit.hit', { type: 'guest_ip', ip, reason: 'redis' });
       return res.status(429).json({ success: false, message: 'Too many guest booking attempts from this IP. Please try again later.' });
     }
   }
@@ -164,6 +167,7 @@ async function guestRateLimiter(req, res, next) {
     const entry = guestRateLimitMap.get(ip) || [];
     const recent = entry.filter(ts => now - ts < windowMs);
     if (recent.length >= max) {
+      metrics.increment('rate_limit.hit', { type: 'guest_ip', ip, reason: 'in-memory' });
       return res.status(429).json({ success: false, message: 'Too many guest booking attempts from this IP. Please try again later.' });
     }
     recent.push(now);
@@ -741,15 +745,23 @@ router.post('/voice-book', protect, moderatePrompt, async (req, res) => {
       if (!rl.ok) return res.status(429).json({ success: false, message: 'Booking limit reached for today. Please contact support or try tomorrow.' });
     } catch (e) { console.warn('User booking limiter error', e && e.message); }
 
-    const booking = await Booking.create({
-      user: req.user._id,
-      service: service._id,
-      date: bookingDate,
-      timeSlot: matchedSlot,
-      stylist: 'Any Available',
-      totalAmount: service.price,
-      status: 'confirmed'
-    });
+    let booking;
+    try {
+      booking = await Booking.create({
+        user: req.user._id,
+        service: service._id,
+        date: bookingDate,
+        timeSlot: matchedSlot,
+        stylist: 'Any Available',
+        totalAmount: service.price,
+        status: 'confirmed'
+      });
+    } catch (err) {
+      if (err && err.code === 11000) {
+        return res.status(409).json({ success: false, message: `Sorry, ${matchedSlot} was just booked. Please choose another slot.` });
+      }
+      throw err;
+    }
 
     await User.findByIdAndUpdate(req.user._id, {
       $inc: { loyaltyPoints: Math.floor(service.price / 10) },
@@ -792,6 +804,20 @@ router.post('/voice-book', protect, moderatePrompt, async (req, res) => {
       user: req.user ? req.user._id : null
     });
     res.status(500).json({ success: false, message: 'Internal server error', error: err.message });
+  }
+});
+
+// Debug: list bookings for a date (ISO or natural). NOT for production long-term.
+router.get('/debug/bookings', async (req, res) => {
+  try {
+    const { date } = req.query;
+    const d = parseBookingDate(date) || null;
+    if (!d) return res.status(400).json({ success: false, message: 'Provide a valid date query param (e.g. ?date=tomorrow or ?date=2026-06-05)' });
+    const bookings = await Booking.find({ date: d }).select('service timeSlot guestEmail guestName user status createdAt');
+    res.json({ success: true, date: d.toISOString(), count: bookings.length, bookings });
+  } catch (e) {
+    console.error('Debug bookings error:', e.message);
+    res.status(500).json({ success: false, message: e.message });
   }
 });
 
@@ -899,19 +925,39 @@ router.post('/voice-book/guest', guestRateLimiter, moderatePrompt, async (req, r
 
     // Prevent double bookings for same date+slot
     const existingGuest = await Booking.findOne({ date: bookingDate, timeSlot: matchedSlot, status: { $ne: 'cancelled' } });
-    if (existingGuest) return res.status(400).json({ success: false, message: `Sorry, ${matchedSlot} is already booked on that date. Please choose another slot.` });
+    if (existingGuest) {
+      // suggest alternative slots
+      const booked = await Booking.find({ date: bookingDate, status: { $ne: 'cancelled' } }).select('timeSlot');
+      const bookedSlots = booked.map(b => b.timeSlot);
+      const alternatives = [];
+      for (const s of TIME_SLOTS) {
+        if (s === matchedSlot) continue;
+        if (!bookedSlots.includes(s)) alternatives.push(s);
+        if (alternatives.length >= 3) break;
+      }
+      metrics.increment('booking.conflict', { date: bookingDate.toISOString(), requested: matchedSlot, alternativesCount: alternatives.length });
+      return res.status(400).json({ success: false, message: `Sorry, ${matchedSlot} is already booked on that date.`, alternatives });
+    }
 
-    const booking = await Booking.create({
-      user: null,
-      guestEmail: toEmail,
-      guestName: toName || 'Guest',
-      service: service._id,
-      date: bookingDate,
-      timeSlot: matchedSlot,
-      stylist: 'Any Available',
-      totalAmount: service.price,
-      status: 'confirmed'
-    });
+    let booking;
+    try {
+      booking = await Booking.create({
+        user: null,
+        guestEmail: toEmail,
+        guestName: toName || 'Guest',
+        service: service._id,
+        date: bookingDate,
+        timeSlot: matchedSlot,
+        stylist: 'Any Available',
+        totalAmount: service.price,
+        status: 'confirmed'
+      });
+    } catch (err) {
+      if (err && err.code === 11000) {
+        return res.status(409).json({ success: false, message: `Sorry, ${matchedSlot} was just booked. Please choose another slot.` });
+      }
+      throw err;
+    }
 
     const { sendBookingConfirmation } = require('../middleware/emailService');
     const emailSent = await sendBookingConfirmation({
@@ -985,15 +1031,23 @@ router.post('/chat-book', protect, moderatePrompt, async (req, res) => {
       if (!rl.ok) return res.status(429).json({ success: false, message: 'Booking limit reached for today. Please contact support or try tomorrow.' });
     } catch (e) { console.warn('User booking limiter error', e && e.message); }
 
-    const booking = await Booking.create({
-      user: req.user._id,
-      service: service._id,
-      date: bookingDate,
-      timeSlot: matchedSlot,
-      stylist: 'Any Available',
-      totalAmount: service.price,
-      status: 'confirmed'
-    });
+    let booking;
+    try {
+      booking = await Booking.create({
+        user: req.user._id,
+        service: service._id,
+        date: bookingDate,
+        timeSlot: matchedSlot,
+        stylist: 'Any Available',
+        totalAmount: service.price,
+        status: 'confirmed'
+      });
+    } catch (err) {
+      if (err && err.code === 11000) {
+        return res.status(409).json({ success: false, message: `Sorry, ${matchedSlot} was just booked. Please choose another slot.` });
+      }
+      throw err;
+    }
 
     await User.findByIdAndUpdate(req.user._id, {
       $inc: { loyaltyPoints: Math.floor(service.price / 10) },

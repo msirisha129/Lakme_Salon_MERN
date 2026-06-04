@@ -192,6 +192,25 @@ const send = async (customMsg = null) => {
     }
 
     // ── NORMAL AI CHAT ──
+    // Quick local canned replies for simple greetings to avoid backend calls
+    const canned = {
+      hi: 'Hi! How can I help you today?',
+      hello: 'Hello! Looking to book or need styling advice?',
+      hey: 'Hey there — would you like to book an appointment or chat about styles?',
+      thanks: "You're welcome! Anything else I can do?",
+      'thank you': "You're welcome! Anything else I can do?",
+      hlo: 'Hi! I did not quite get that — can you type or say hello?',
+    };
+    const clean = (msg || '').trim().toLowerCase().replace(/[!.,?]/g, '');
+    if (clean.length <= 20 && (canned[clean] || /^(hi|hello|hey|hlo|thanks|thank you)$/.test(clean))) {
+      const botMessage = { from: 'bot', text: canned[clean] || 'Hi! How can I help you today?' };
+      setMessages(m => [...m, botMessage]);
+      setConversationHistory(h => [...h, botMessage]);
+      setLoading(false);
+      setTyping(false);
+      return;
+    }
+
     const { data } = await API.post('/ai/chat', { message: msg, conversationHistory });
     await new Promise(r => setTimeout(r, 600));
     setTyping(false);

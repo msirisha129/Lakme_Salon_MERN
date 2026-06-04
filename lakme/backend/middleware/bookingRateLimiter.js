@@ -17,7 +17,7 @@ const emailMap = new Map();
 function _now() { return Date.now(); }
 
 async function consumeUserLimit(userId) {
-  const max = Number(process.env.USER_BOOKINGS_PER_DAY || 3);
+  const max = Number(process.env.USER_BOOKINGS_PER_DAY || 15);
   const duration = Number(process.env.USER_BOOKINGS_WINDOW_SEC || 24 * 3600);
   const key = `user_booking_${userId}`;
   if (redisClient && RateLimiterRedis) {

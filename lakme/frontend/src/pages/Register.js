@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -16,6 +16,18 @@ export default function Register() {
   confirm: '' 
 }); 
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    try {
+      const pre = localStorage.getItem('lakme_pre_register');
+      if (pre) {
+        const obj = JSON.parse(pre);
+        setForm(f => ({ ...f, name: obj.name || f.name, phone: obj.phone || f.phone }));
+        // remove after applying
+        localStorage.removeItem('lakme_pre_register');
+      }
+    } catch (e) { /* ignore parse errors */ }
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

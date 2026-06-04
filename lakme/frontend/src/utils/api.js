@@ -23,6 +23,10 @@ API.interceptors.response.use(
       // attach a friendly message
       err.message = 'Network Error: Unable to reach backend. Check server (backend) is running.';
     }
+    // attach server-provided message for easier handling in UI
+    if (err.response && err.response.data && err.response.data.message) {
+      err.serverMessage = err.response.data.message;
+    }
     if (err.response?.status === 401) {
       localStorage.removeItem('lakme_token');
       localStorage.removeItem('lakme_user');

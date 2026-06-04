@@ -54,11 +54,17 @@ router.post('/', protect, async (req, res) => {
     const existing = await Booking.findOne({ date: parsed, timeSlot, status: { $ne: 'cancelled' } });
     if (existing) return res.status(400).json({ success: false, message: `Sorry, ${timeSlot} is already booked on that date. Please choose another slot.` });
 
-    const booking = await Booking.create({
-      user: req.user._id, service: serviceId, date: parsed, timeSlot,
-      stylist: stylist || 'Any Available', notes,
-      totalAmount: service.price, status: 'confirmed'
-    });
+    let booking;
+    try {
+      booking = await Booking.create({
+        user: req.user._id, service: serviceId, date: parsed, timeSlot,
+        stylist: stylist || 'Any Available', notes,
+        totalAmount: service.price, status: 'confirmed'
+      });
+    } catch (err) {
+      if (err && err.code === 11000) return res.status(409).json({ success: false, message: `Sorry, ${timeSlot} was just booked. Please choose another slot.` });
+      throw err;
+    }
 
     // Add loyalty points (1 point per ₹10)
     await User.findByIdAndUpdate(req.user._id, {

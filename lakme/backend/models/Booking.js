@@ -30,4 +30,7 @@ const bookingSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
+// Prevent accidental duplicate bookings for the same date + timeslot
+bookingSchema.index({ date: 1, timeSlot: 1 }, { unique: true, partialFilterExpression: { status: { $ne: 'cancelled' } } });
+
 module.exports = mongoose.model('Booking', bookingSchema);

@@ -21,8 +21,12 @@
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
+    "start:prod": "serve -s build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
+  },
+  "devDependencies": {
+    "serve": "^14.2.0"
   },
   "proxy": "http://localhost:5000",
   "browserslist": {

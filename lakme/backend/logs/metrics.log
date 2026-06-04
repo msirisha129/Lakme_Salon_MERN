@@ -1,0 +1,2 @@
+{"ts":"2026-06-04T12:13:36.182Z","event":"booking.conflict","details":{"date":"2026-06-05T06:30:00.000Z","requested":"10 AM","alternativesCount":3}}
+{"ts":"2026-06-04T16:25:35.466Z","event":"booking.conflict","details":{"date":"2026-06-05T06:30:00.000Z","requested":"10 AM","alternativesCount":3}}

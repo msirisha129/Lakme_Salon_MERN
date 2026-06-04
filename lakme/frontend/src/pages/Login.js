@@ -14,9 +14,17 @@ export default function Login() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    // Basic client-side validation to avoid accidental weak creds
+    const email = (form.email || '').trim();
+    const password = form.password || '';
+    const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    if (!emailValid) { toast.error('Please enter a valid email address'); return; }
+    if (password.length < 6) { toast.error('Password must be at least 6 characters'); return; }
+    const weak = /^(password|123456|qwerty|admin|admin123)$/i;
+    if (weak.test(password)) { toast.error('Please use a stronger password'); return; }
     setLoading(true);
     try {
-      await login(form.email, form.password);
+      await login(email, password);
       toast.success('Welcome back! 💄');
       navigate(searchParams.get('redirect') || '/');
     } catch (err) {
