@@ -40,7 +40,7 @@ borderBottom: '1px solid rgba(201,168,76,0.15)',
       transition: 'all 0.4s ease',
       padding: '0 24px',
     }}>
-      <div style={{ maxWidth: 1280, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 72 }}>
+      <div style={{ maxWidth: 1280, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 64, padding: '8px 0' }}>
         {/* Logo */}
         <Link to="/" style={{ display: 'flex', flexDirection: 'column', lineHeight: 1 }}>
           <span style={{
@@ -128,11 +128,11 @@ borderBottom: '1px solid rgba(201,168,76,0.15)',
         </div>
 
         {/* Mobile Menu Toggle */}
-        <button onClick={() => setMenuOpen(!menuOpen)} className="mobile-menu-btn" style={{
-          background: 'transparent', border: 'none', cursor: 'pointer',
+        <button onClick={() => setMenuOpen(!menuOpen)} className="mobile-menu-btn" aria-label="Open menu" style={{
+          background: 'transparent', border: 'none', cursor: 'pointer', padding: 8, borderRadius: 8,
         color: scrolled ? 'var(--black)' : '#ffffff',
         }}>
-          {menuOpen ? <X size={24} /> : <Menu size={24} />}
+          {menuOpen ? <X size={22} /> : <Menu size={22} />}
         </button>
       </div>
 
@@ -140,7 +140,8 @@ borderBottom: '1px solid rgba(201,168,76,0.15)',
       {menuOpen && (
         <div style={{
           background: 'white', borderTop: '1px solid var(--border-light)',
-          padding: '16px 24px 24px'
+          padding: '18px 18px',
+          position: 'fixed', left: 0, right: 0, top: 64, zIndex: 999, maxHeight: 'calc(100vh - 64px)', overflowY: 'auto'
         }}>
           {links.map(({ to, label }) => (
             <Link key={to} to={to} style={{
@@ -150,11 +151,11 @@ borderBottom: '1px solid rgba(201,168,76,0.15)',
             }}>{label}</Link>
           ))}
           {user ? (
-            <button onClick={() => { logout(); setMenuOpen(false); }} style={{ marginTop: 16, color: 'var(--rose)', fontSize: 13, letterSpacing: 2, textTransform: 'uppercase', background: 'none', border: 'none', cursor: 'pointer' }}>Sign Out</button>
+            <button onClick={() => { logout(); setMenuOpen(false); }} style={{ marginTop: 16, color: 'var(--rose)', fontSize: 13, letterSpacing: 2, textTransform: 'uppercase', background: 'none', border: 'none', cursor: 'pointer', padding: '12px 8px' }}>Sign Out</button>
           ) : (
-            <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
-              <Link to="/login" className="btn-outline" style={{ fontSize: 11, padding: '10px 20px' }}>Sign In</Link>
-              <Link to="/register" className="btn-primary" style={{ fontSize: 11, padding: '10px 20px' }}>Join Us</Link>
+            <div style={{ display: 'flex', gap: 12, marginTop: 16, flexDirection: 'column' }}>
+              <Link to="/login" className="btn-outline" style={{ fontSize: 14, padding: '12px 16px', width: '100%', textAlign: 'center' }}>Sign In</Link>
+              <Link to="/register" className="btn-primary" style={{ fontSize: 14, padding: '12px 16px', width: '100%', textAlign: 'center' }}>Join Us</Link>
             </div>
           )}
         </div>

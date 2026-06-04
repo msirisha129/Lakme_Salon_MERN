@@ -486,7 +486,7 @@ function VoiceAssistantModal({ onClose }) {
   // ── Smart Booking Flow ────────────────────────────────────────────────────
   function startBookingFlow() {
     setBookingStep('askName');
-    setBookingData({ name: null, phone: null, service: null, date: null, time: null });
+    updateBookingData({ name: null, phone: null, service: null, date: null, time: null });
     var q = "Perfect! Let's book your appointment. First, what is your full name?";
     console.log('Starting booking flow.');
     addMessage('assistant', q);
@@ -745,7 +745,7 @@ function VoiceAssistantModal({ onClose }) {
               speakGroq(successMsg);
               localStorage.removeItem('lakme_booking_draft');
               setBookingStep(null);
-              setBookingData({ name: null, phone: null, service: null, date: null, time: null, email: null });
+              updateBookingData({ name: null, phone: null, service: null, date: null, time: null, email: null });
               setStatusText('Tap mic to speak');
               return;
             } else {
@@ -781,7 +781,7 @@ function VoiceAssistantModal({ onClose }) {
             speakGroq(successMsg2);
             localStorage.removeItem('lakme_booking_draft');
             setBookingStep(null);
-            setBookingData({ name: null, phone: null, service: null, date: null, time: null, email: null });
+            updateBookingData({ name: null, phone: null, service: null, date: null, time: null, email: null });
             setStatusText('Tap mic to speak');
           } else {
             var backendMsg2 = (guestData && (guestData.message || guestData.error)) ? (guestData.message || guestData.error) : 'Unable to complete booking. Please try again.';
@@ -809,7 +809,7 @@ function VoiceAssistantModal({ onClose }) {
         speakGroq(retryMsg);
         setBookingStep('askName');
         console.log('Booking cancelled by user, restarting flow.');
-        setBookingData({ name: null, phone: null, service: null, date: null, time: null });
+        updateBookingData({ name: null, phone: null, service: null, date: null, time: null });
       } else {
         var clarifyMsg = "Please say yes if the details are correct, or no if you'd like to change something.";
         addMessage('assistant', clarifyMsg);
@@ -1433,15 +1433,25 @@ function AIAssistantSection({ onOpenChat }) {
         ),
         React.createElement('div', { style: { display: 'flex', gap: '8px' } },
           React.createElement('button', {
-            onClick: () => {
-              const draft = loadDraft();
-              if (draft) {
-                setBookingData(draft);
-                setVoiceOpen(true);
-              }
-            },
-            style: { padding: '8px 16px', background: '#fff', color: '#4caf50', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }
-          }, 'Resume'),
+              onClick: () => {
+                const draft = loadDraft();
+                if (!draft) return;
+                // Prefer updating via helper if available (keeps localStorage in sync)
+                try {
+                  if (typeof updateBookingData === 'function') {
+                    updateBookingData(draft);
+                  } else {
+                    // Fallback: persist and set ref; some callers may not have setter in scope
+                    try { localStorage.setItem('lakme_booking_draft', JSON.stringify(draft)); } catch(e){}
+                    if (typeof bookingDataRef !== 'undefined' && bookingDataRef && bookingDataRef.current !== undefined) bookingDataRef.current = draft;
+                    // Notify any listeners elsewhere
+                    window.dispatchEvent(new CustomEvent('lakme_booking_resume', { detail: draft }));
+                  }
+                } catch (e) { console.warn('Resume handler error', e); }
+                try { setVoiceOpen(true); } catch(e) { /* ignore */ }
+              },
+              style: { padding: '8px 16px', background: '#fff', color: '#4caf50', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }
+            }, 'Resume'),
           React.createElement('button', {
             onClick: () => { clearDraft(); setHasDraft(false); },
             style: { padding: '8px 16px', background: 'transparent', color: '#fff', border: '1px solid #fff', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }
@@ -1484,7 +1494,7 @@ var styles = {
   orText:{fontSize:11,color:'#555',letterSpacing:'0.1em',fontFamily:"'Montserrat',sans-serif"},
   bottomNote:{marginTop:56,fontSize:12,color:'#555',fontFamily:"'Montserrat',sans-serif"},
   modalBackdrop:{position:'fixed',inset:0,background:'rgba(0,0,0,0.75)',backdropFilter:'blur(8px)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:99999,padding:16},
-  voiceModal:{background:'#111',border:'1px solid rgba(201,168,76,0.3)',borderRadius:4,width:'100%',maxWidth:440,display:'flex',flexDirection:'column',maxHeight:'90vh',overflow:'hidden',boxShadow:'0 32px 80px rgba(0,0,0,0.6)'},
+  voiceModal:{background:'#111',border:'1px solid rgba(201,168,76,0.3)',borderRadius:4,width:'100%',maxWidth:'min(440px,96vw)',display:'flex',flexDirection:'column',maxHeight:'90vh',overflow:'hidden',boxShadow:'0 32px 80px rgba(0,0,0,0.6)'},
   vmHeader:{padding:'20px 24px',borderBottom:'1px solid rgba(201,168,76,0.15)',display:'flex',alignItems:'center',gap:14,background:'rgba(201,168,76,0.05)'},
   vmLogo:{width:44,height:44,borderRadius:'50%',background:'rgba(201,168,76,0.15)',display:'flex',alignItems:'center',justifyContent:'center',border:'1px solid rgba(201,168,76,0.3)'},
   vmTitle:{fontSize:16,fontWeight:500,color:'#f5f0e8',fontFamily:"'Cormorant Garamond',Georgia,serif"},
@@ -1493,7 +1503,7 @@ var styles = {
   vmConnDot: { width: '6px', height: '6px', borderRadius: '50%' },
   vmConnText: { fontSize: '10px', color: '#888', fontFamily: 'Montserrat', fontWeight: '500', textTransform: 'uppercase' },
   vmClose:{marginLeft:'auto',background:'none',border:'none',color:'#666',cursor:'pointer',fontSize:18,padding:4}, // Existing close button
-  vmDisplayArea: { minHeight:'140px', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', borderBottom:'1px solid rgba(255,255,255,0.03)' },
+  vmDisplayArea: { minHeight:'120px', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', borderBottom:'1px solid rgba(255,255,255,0.03)', padding: '12px 16px' },
   vmTimer: { fontSize: '14px', color: '#888', fontFamily: "'Montserrat', sans-serif", letterSpacing: '2px', marginBottom: '12px' },
   vmMicArea:{padding:'32px 20px', display:'flex',flexDirection:'column',alignItems:'center',gap:20,background:'rgba(0,0,0,0.2)'},
   waveContainer: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', height: '60px', width: '100%' },

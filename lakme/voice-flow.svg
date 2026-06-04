@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800">
+  <style>text{font-family:Arial, Helvetica, sans-serif; font-size:14px}</style>
+  <rect width="100%" height="100%" fill="#ffffff"/>
+  <text x="20" y="30" font-size="16" font-weight="700">Voice Assistant Flow (Mermaid source in voice-flow.mmd)</text>
+  <foreignObject x="20" y="50" width="1160" height="720">
+    <pre xmlns="http://www.w3.org/1999/xhtml" style="font-family:monospace; font-size:13px; white-space:pre-wrap;">
+flowchart TD
+  A[User taps Voice UI (`AIAssistantSection`)] --> B{Mic Permission?}
+  B -- Yes --> C[Start local STT (Web Speech API)\nInterim + final transcripts]
+  B -- No --> F[Show typed fallback / request permission]
+  C --> D[Client UX layer]
+  D --> D1[Deduplicate & short-confirm handling]
+  D --> D2[Persist draft → `localStorage`]
+  D --> E{Confidence OK?}
+  E -- High --> H[Use local transcript for intent extraction]
+  E -- Low / Needs accuracy --> G[Stream audio → Deepgram (real-time ASR / diarization / punctuation / custom models)]
+  G --> I[Deepgram returns enriched transcript + metadata]
+  H --> J[Normalize transcript → structured fields (name/phone/service/date/time/confirm)]
+  I --> J
+  J --> K[/POST /ai/voice-book or /ai/voice-book/guest/]
+  K --> L[Backend validate & check slots / business rules]
+  L --> M{Create booking?}
+  M -- Yes --> N[Create DB record (Booking) & persist transcript ref]
+  N --> O[Send confirmation email (emailService.js) — mark: "Confirmed via Voice Assistant"]
+  M -- No --> P[Return error / suggest alternatives]
+  O --> Q[Return JSON success]
+  P --> Q
+  Q --> R[Client TTS announces result & updates UI]
+  R --> S[User sees confirmation + email]
+  T[Transcripts & metadata indexed] --- U[GROQ queries for context, search, analytics]
+    </pre>
+  </foreignObject>
+</svg>

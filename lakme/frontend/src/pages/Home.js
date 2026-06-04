@@ -92,7 +92,7 @@ export default function Home({ onOpenChat }) {
         <div style={{ position: 'absolute', top: '20%', right: '15%', width: 400, height: 400, borderRadius: '50%', background: 'radial-gradient(circle, rgba(201,168,76,0.12) 0%, transparent 70%)', filter: 'blur(40px)' }} />
         <div style={{ position: 'absolute', bottom: '20%', left: '10%', width: 300, height: 300, borderRadius: '50%', background: 'radial-gradient(circle, rgba(200,0,59,0.08) 0%, transparent 70%)', filter: 'blur(40px)' }} />
 
-        <div className="container" style={{ position: 'relative', zIndex: 2, paddingTop: 220, paddingBottom: 80 }}>
+        <div className="container" style={{ position: 'relative', zIndex: 2, paddingTop: 'clamp(120px, 20vh, 220px)', paddingBottom: 48 }}>
           <div style={{ maxWidth: 720 }}>
             <span style={{ fontSize: 11, letterSpacing: 5, textTransform: 'uppercase', color: 'var(--gold)', fontWeight: 500 }}>✦ The Art of Beauty ✦</span>
             <h1 style={{ color: 'white', marginTop: 20, marginBottom: 24 }}>
@@ -105,7 +105,7 @@ export default function Home({ onOpenChat }) {
               <Link to="/booking" className="btn-primary" style={{ fontSize: 12 }}>Book Appointment <ArrowRight size={14} /></Link>
               <Link to="/services" className="btn-outline" style={{ fontSize: 12, borderColor: 'rgba(201,168,76,0.5)', color: 'var(--gold)' }}>Explore Services</Link>
             </div>
-            <div style={{ display: 'flex', gap: 32, marginTop: 60, borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 32, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: 20, marginTop: 40, borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 20, flexWrap: 'wrap' }}>
               {[{ icon: <Phone size={14} />, text: '+91 98765 43210' }, { icon: <MapPin size={14} />, text: 'Multiple Locations' }, { icon: <Clock size={14} />, text: '9 AM – 8 PM Daily' }].map((item, i) => (
                 <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'rgba(255,255,255,0.5)', fontSize: 13 }}>
                   <span style={{ color: 'var(--gold)' }}>{item.icon}</span>{item.text}
@@ -147,7 +147,7 @@ export default function Home({ onOpenChat }) {
             {categories.map((cat, i) => (
               <Link to={`/services?category=${cat.name}`} key={i} style={{
                 display: 'block', borderRadius: 14, overflow: 'hidden', position: 'relative',
-                height: 320, transition: 'transform 0.4s, box-shadow 0.4s',
+                height: 'min(320px, 58vw)', transition: 'transform 0.4s, box-shadow 0.4s',
                 boxShadow: '0 4px 24px rgba(0,0,0,0.13)'
               }}
                 onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-8px) scale(1.02)'; e.currentTarget.style.boxShadow = '0 24px 60px rgba(0,0,0,0.28)'; }}
@@ -161,7 +161,7 @@ export default function Home({ onOpenChat }) {
                 {/* Gold shimmer top border */}
                 <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: 'linear-gradient(90deg, transparent, var(--gold), transparent)' }} />
                 {/* Content */}
-                <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '28px 28px 24px', textAlign: 'left' }}>
+                <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '20px', textAlign: 'left' }}>
                   <div style={{ fontSize: 28, marginBottom: 8 }}>{cat.icon}</div>
                   <h3 style={{ color: 'white', fontFamily: 'var(--font-display)', fontSize: '1.7rem', marginBottom: 6, lineHeight: 1.1 }}>{cat.name}</h3>
                   <p style={{ color: 'rgba(255,255,255,0.65)', fontSize: 12.5, marginBottom: 14, letterSpacing: 0.3 }}>{cat.desc}</p>
@@ -205,7 +205,7 @@ export default function Home({ onOpenChat }) {
                   onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 16px rgba(0,0,0,0.07)'; }}>
 
                   {/* ── Image area ── */}
-                  <div style={{ position: 'relative', height: 180, overflow: 'hidden' }}>
+                  <div style={{ position: 'relative', height: 'min(220px,40vw)', overflow: 'hidden' }}>
                     <img
                       src={meta.img}
                       alt={s.name}
@@ -237,7 +237,7 @@ export default function Home({ onOpenChat }) {
                   </div>
 
                   {/* ── Card body ── */}
-                  <div style={{ padding: '18px 20px 20px' }}>
+                  <div style={{ padding: '14px 16px 16px' }}>
                     <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.15rem', color: '#1A1A1A', marginBottom: 7, lineHeight: 1.3 }}>{s.name}</h3>
                     <p style={{ fontSize: 12.5, color: '#888', lineHeight: 1.65, marginBottom: 16 }}>{(s.description || '').slice(0, 72)}...</p>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #F0EAE0', paddingTop: 14 }}>
@@ -272,8 +272,8 @@ export default function Home({ onOpenChat }) {
         <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: 'linear-gradient(90deg, transparent 0%, var(--gold) 40%, var(--gold) 60%, transparent 100%)', opacity: 0.6 }} />
         <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 1, background: 'linear-gradient(90deg, transparent 0%, rgba(201,168,76,0.4) 50%, transparent 100%)' }} />
 
-        <div className="container" style={{ position: 'relative', zIndex: 1, padding: '80px 24px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 480px', gap: 80, alignItems: 'center' }}>
+          <div className="container" style={{ position: 'relative', zIndex: 1, padding: '48px 16px' }}>
+        <div className="ai-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 420px', gap: 36, alignItems: 'center' }}>
 
             {/* ── LEFT: text + stats ── */}
             <div>

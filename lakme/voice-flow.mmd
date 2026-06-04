@@ -1,0 +1,24 @@
+flowchart TD
+  A[User taps Voice UI\n(`AIAssistantSection`)] --> B{Mic Permission?}
+  B -- Yes --> C[Start local STT (Web Speech API)\nInterim + final transcripts]
+  B -- No --> F[Show typed fallback / request permission]
+  C --> D[Client UX layer]
+  D --> D1[Deduplicate & short-confirm handling]
+  D --> D2[Persist draft → `localStorage`]
+  D --> E{Confidence OK?}
+  E -- High --> H[Use local transcript for intent extraction]
+  E -- Low / Needs accuracy --> G[Stream audio → Deepgram (real-time ASR / diarization / punctuation / custom models)]
+  G --> I[Deepgram returns enriched transcript + metadata]
+  H --> J[Normalize transcript → structured fields (name/phone/service/date/time/confirm)]
+  I --> J
+  J --> K[/POST /ai/voice-book or /ai/voice-book/guest/]
+  K --> L[Backend validate & check slots / business rules]
+  L --> M{Create booking?}
+  M -- Yes --> N[Create DB record (Booking) & persist transcript ref]
+  N --> O[Send confirmation email (emailService.js) — mark: "Confirmed via Voice Assistant"]
+  M -- No --> P[Return error / suggest alternatives]
+  O --> Q[Return JSON success]
+  P --> Q
+  Q --> R[Client TTS announces result & updates UI]
+  R --> S[User sees confirmation + email]
+  T[Transcripts & metadata indexed] --- U[GROQ queries for context, search, analytics]

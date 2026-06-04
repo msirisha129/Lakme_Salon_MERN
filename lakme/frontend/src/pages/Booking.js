@@ -64,20 +64,20 @@ export default function Booking() {
   const CATEGORIES = ['Hair', 'Skin', 'Nails', 'Bridal', 'Makeup', 'Spa'];
 
   return (
-    <div style={{ paddingTop: 72, minHeight: '100vh', background: 'var(--cream)' }}>
+    <div style={{ paddingTop: 64, minHeight: '100vh', background: 'var(--cream)' }}>
       <div style={{
-  backgroundImage: `linear-gradient(to bottom, rgba(5,2,10,0.55) 0%, rgba(5,2,10,0.80) 60%, rgba(5,2,10,0.98) 100%), url('https://images.unsplash.com/photo-1560869713-bf165a9cfac1?w=1600&q=90')`,
-  backgroundSize: 'cover',
-  backgroundPosition: 'center 30%',
-  padding: '100px 0 70px',
-  textAlign: 'center',
-  position: 'relative',
-  overflow: 'hidden'
-}}>
+      backgroundImage: `linear-gradient(to bottom, rgba(5,2,10,0.55) 0%, rgba(5,2,10,0.80) 60%, rgba(5,2,10,0.98) 100%), url('https://images.unsplash.com/photo-1560869713-bf165a9cfac1?w=1600&q=90')`,
+      backgroundSize: 'cover',
+      backgroundPosition: 'center 30%',
+      padding: 'clamp(48px, 18vh, 100px) 0 clamp(28px, 8vh, 70px)',
+      textAlign: 'center',
+      position: 'relative',
+      overflow: 'hidden'
+    }}>
   <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 70% 50% at 50% 100%, rgba(201,168,76,0.12) 0%, transparent 70%)', pointerEvents: 'none' }} />
  <div style={{ position: 'relative', zIndex: 1 }}></div>
   <h1 style={{ color: 'white', fontSize: 'clamp(1.8rem, 4vw, 3rem)', marginBottom: 16, textAlign: 'center' }}>Book Appointment</h1>
-<div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 0, marginTop: 28 }}>
+<div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 0, marginTop: 18, flexWrap: 'wrap' }}>
   {['Select Service', 'Choose Date & Time', 'Confirm', 'Done'].map((s, i) => (
     <div key={i} style={{ display: 'flex', alignItems: 'center' }}>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
@@ -94,7 +94,7 @@ export default function Booking() {
 </div>
       </div>
 
-      <div className="container" style={{ maxWidth: 860, padding: '40px 24px' }}>
+      <div className="container" style={{ maxWidth: 860, padding: '20px 12px' }}>
 
         {/* STEP 1 — Service */}
         {step === 1 && (
@@ -110,7 +110,7 @@ export default function Booking() {
                     <span style={{ fontSize: 20 }}>{catEmojis[cat]}</span>
                     <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.3rem' }}>{cat}</h3>
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
                     {catServices.map(s => (
                       <div key={s._id} onClick={() => { handleService(s._id); setStep(2); }} style={{
                         background: form.serviceId === s._id ? 'linear-gradient(135deg, var(--gold), var(--gold-dark))' : 'white',
@@ -169,7 +169,7 @@ export default function Booking() {
             </div>
 
             {form.date && (
-              <div style={{ marginTop: 24 }}>
+              <div style={{ marginTop: 18 }}>
                 <label className="form-label"><Clock size={12} style={{ display: 'inline', marginRight: 6 }} />Available Time Slots</label>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
                   {slots.length === 0 ? (
@@ -187,7 +187,7 @@ export default function Booking() {
               </div>
             )}
 
-            <div style={{ marginTop: 24 }}>
+            <div style={{ marginTop: 18 }}>
               <label className="form-label">Special Notes (Optional)</label>
               <textarea className="form-input" rows={3} placeholder="Any special requests or preferences..."
                 value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
@@ -240,9 +240,9 @@ export default function Booking() {
               </div>
             )}
 
-            <div style={{ display: 'flex', gap: 12 }}>
-              <button onClick={() => setStep(2)} className="btn-outline" style={{ flex: 1 }}>Edit</button>
-              <button onClick={handleSubmit} disabled={loading || !user} className="btn-primary" style={{ flex: 2, opacity: loading || !user ? 0.6 : 1 }}>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              <button onClick={() => setStep(2)} className="btn-outline" style={{ flex: '1 1 120px' }}>Edit</button>
+              <button onClick={handleSubmit} disabled={loading || !user} className="btn-primary" style={{ flex: '2 1 200px', opacity: loading || !user ? 0.6 : 1 }}>
                 {loading ? 'Confirming...' : 'Confirm Booking'} {!loading && <Check size={14} />}
               </button>
             </div>

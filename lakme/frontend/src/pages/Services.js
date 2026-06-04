@@ -32,19 +32,18 @@ export default function Services() {
   return (
     <div style={{ paddingTop: 72 }}>
       {/* Header */}
-     <div style={{
+      <div style={{
   backgroundImage: "url('/images/services-bg.png')",
   backgroundSize: 'cover',
   backgroundPosition: 'center',
   backgroundRepeat: 'no-repeat',
-  padding: '80px 0 60px',
+  padding: 'clamp(48px, 18vh, 120px) 0 clamp(32px, 8vh, 60px)',
   position: 'relative'
-  
 }}>
        <div style={{
-  marginLeft: '120px',
+  margin: '0 auto',
   maxWidth: '520px',
-  paddingTop: '40px'
+  padding: '12px'
 }}>
 
   <span className="section-label">Our Menu</span>
@@ -71,7 +70,7 @@ export default function Services() {
 </div>
 </div>
 
-      <div className="container" style={{ padding: '40px 24px' }}>
+      <div className="container" style={{ padding: '20px 12px' }}>
         {/* Search + Filter */}
         <div style={{ display: 'flex', gap: 16, marginBottom: 40, flexWrap: 'wrap', alignItems: 'center' }}>
           <div style={{ position: 'relative', flex: 1, minWidth: 240 }}>
@@ -111,7 +110,7 @@ export default function Services() {
               {filtered.map((s, i) => (
                 <div key={s._id} className="card">
                  <div style={{
-  height: 220,
+  height: 'min(220px, 40vw)',
   overflow: 'hidden',
   position: 'relative'
 }}>
@@ -180,7 +179,7 @@ src={
   )}
 </div>
 
-                  <div style={{ padding: '20px 24px 24px' }}>
+                  <div style={{ padding: '14px 16px 16px' }}>
                     <span className="badge badge-gold" style={{ marginBottom: 10, display: 'inline-block' }}>{s.category}</span>
                     <h3 style={{ fontSize: '1.15rem', fontFamily: 'var(--font-display)', marginBottom: 8, lineHeight: 1.3 }}>{s.name}</h3>
                     <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 16 }}>{s.description}</p>
