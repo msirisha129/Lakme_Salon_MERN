@@ -51,6 +51,8 @@ function VoiceAssistantModal({ onClose }) {
     });
   }
   const listenRestartCountRef = React.useRef(0);
+  const listenStartingRef = React.useRef(false);
+  const lastSRErrorRef = React.useRef(null);
 
   React.useEffect(() => { phaseRef.current = phase; }, [phase]);
   React.useEffect(() => { messagesRef.current = messages; }, [messages]);
@@ -351,7 +353,7 @@ function VoiceAssistantModal({ onClose }) {
       // Wait longer before auto-listening to give user time to respond
       // During booking, wait 1.5 seconds; otherwise wait 2 seconds
       const waitTime = bookingStepRef.current ? 1500 : 2000;
-      setTimeout(() => startListening(), waitTime);
+      setTimeout(() => safeStartListening(), waitTime);
     };
     
     utt.onerror = (e) => {
@@ -360,7 +362,7 @@ function VoiceAssistantModal({ onClose }) {
       setPhase('idle'); phaseRef.current = 'idle';
       setStatusText('Tap mic to speak');
       // Wait before restarting
-      setTimeout(() => startListening(), 800);
+      setTimeout(() => safeStartListening(), 800);
     };
     
     uttRef.current = utt; // Hold reference
@@ -499,14 +501,14 @@ function VoiceAssistantModal({ onClose }) {
       phaseRef.current = 'idle';
       setStatusText('Tap mic to speak');
       const waitTime = bookingStepRef.current ? 1500 : 2000;
-      setTimeout(() => startListening(), waitTime);
+      setTimeout(() => safeStartListening(), waitTime);
     };
     
     utt.onerror = (e) => {
       console.warn('Speech error:', e.error);
       setPhase('idle');
       phaseRef.current = 'idle';
-      setTimeout(() => startListening(), 800);
+      setTimeout(() => safeStartListening(), 800);
     };
     
     uttRef.current = utt;
@@ -1140,7 +1142,7 @@ function VoiceAssistantModal({ onClose }) {
           } else {
             console.log('No meaningful text detected, continuing to listen...');
             // Restart listening if not enough text
-            setTimeout(() => startListening(), 300);
+            setTimeout(() => safeStartListening(), 300);
           }
         }, 1400); // Slightly increased to 1.4s to allow natural pauses
       }
@@ -1149,6 +1151,7 @@ function VoiceAssistantModal({ onClose }) {
     r.onerror = (e) => {
       console.log('Speech error:', e.error);
       console.log('Restart attempts:', listenRestartCountRef.current);
+      lastSRErrorRef.current = e.error;
       
       // Ignore "aborted" errors - they're normal when user stops listening
       if (e.error === 'aborted') {
@@ -1185,6 +1188,15 @@ function VoiceAssistantModal({ onClose }) {
     };
 
     r.onend = () => {
+      // if the last SR error was 'aborted', don't immediately restart
+      const lastErr = lastSRErrorRef.current;
+      lastSRErrorRef.current = null; // reset for next session
+      if (lastErr === 'aborted') {
+        console.log('SR ended due to abort; not restarting to avoid loop.');
+        setPhase('idle'); phaseRef.current = 'idle';
+        setStatusText('Tap mic to speak');
+        return;
+      }
       // Clear timers
       if (silenceTimerRef.current) { clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null; }
       if (listeningTimeoutRef.current) clearTimeout(listeningTimeoutRef.current);
@@ -1201,6 +1213,22 @@ function VoiceAssistantModal({ onClose }) {
 
     srRef.current = r;
     try { r.start(); } catch(e) { console.log('SR start error:', e); }
+  }
+
+  // Start wrapper to avoid concurrent starts and rapid restart loops
+  function safeStartListening() {
+    if (listenStartingRef.current) {
+      console.log('safeStartListening: start already in progress, skipping');
+      return;
+    }
+    listenStartingRef.current = true;
+    try {
+      startListening();
+    } catch (e) {
+      console.warn('safeStartListening error', e);
+    } finally {
+      setTimeout(() => { listenStartingRef.current = false; }, 800);
+    }
   }
 
   async function processSpeech(text) {
