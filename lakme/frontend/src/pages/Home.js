@@ -391,10 +391,8 @@ export default function Home({ onOpenChat }) {
             ))}
           </div>
         </div>
-      </section>
-      {/* ── AI ASSISTANT SECTION ── */}
+      </section>      {/* ── AI ASSISTANT SECTION ── */}
 <AIAssistantSection onOpenChat={onOpenChat} />
-
       {/* ── CTA (YOUR VERSION — UNTOUCHED) ──────────────────────────────── */}
       <section style={{ background: 'var(--black)', padding: '80px 0', textAlign: 'center' }}>
         <div className="container">

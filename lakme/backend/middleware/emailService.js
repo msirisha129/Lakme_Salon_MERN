@@ -1,57 +1,109 @@
 const { Resend } = require('resend');
-const resend = new Resend(process.env.RESEND_API_KEY);
+const nodemailer = require('nodemailer');
+
+const hasResend = !!process.env.RESEND_API_KEY;
+let resend;
+if (hasResend) {
+  try { resend = new Resend(process.env.RESEND_API_KEY); } catch (e) { resend = null; }
+}
+
+async function _sendWithResend({ from, to, subject, html }) {
+  if (!resend) throw new Error('Resend not configured');
+  return await resend.emails.send({ from, to, subject, html });
+}
+
+async function _sendWithSMTP({ from, to, subject, html }) {
+  if (!process.env.EMAIL_USER) throw new Error('SMTP not configured');
+  const transporter = nodemailer.createTransport({
+    host: process.env.EMAIL_HOST || 'smtp.ethereal.email',
+    port: process.env.EMAIL_PORT ? Number(process.env.EMAIL_PORT) : 587,
+    secure: process.env.EMAIL_SECURE === 'true',
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS
+    }
+  });
+  return await transporter.sendMail({ from, to, subject, html });
+}
 
 async function sendBookingConfirmation({ toEmail, toName, serviceName, date, timeSlot, amount, loyaltyPoints }) {
-  try {
-    await resend.emails.send({
-      from: 'Lakmé Salon <onboarding@resend.dev>',
-      to: toEmail,
-      subject: '✅ Booking Confirmed — Lakmé Salon',
-      html: `
-        <div style="font-family:Arial;max-width:500px;margin:auto;padding:20px">
-          <h2 style="color:#C9A84C">Booking Confirmed! 🎉</h2>
-          <p>Hi ${toName}, your booking is confirmed!</p>
-          <table style="width:100%;border-collapse:collapse;margin:20px 0">
-            <tr><td style="padding:8px;color:#999">Service</td><td style="padding:8px;font-weight:bold">${serviceName}</td></tr>
-            <tr style="background:#f9f9f9"><td style="padding:8px;color:#999">Date</td><td style="padding:8px">${date}</td></tr>
-            <tr><td style="padding:8px;color:#999">Time</td><td style="padding:8px">${timeSlot}</td></tr>
-            <tr style="background:#f9f9f9"><td style="padding:8px;color:#999">Amount</td><td style="padding:8px;color:#C9A84C;font-weight:bold">₹${amount}</td></tr>
-          </table>
-          <p style="background:#FDF8F0;padding:12px;border-radius:8px;text-align:center">🌟 You earned ${loyaltyPoints} loyalty points!</p>
-          <p style="color:#999;font-size:12px">Lakmé Salon | +91 98765 43210</p>
+  const from = process.env.EMAIL_FROM || 'Lakmé Salon <no-reply@lakme.example.com>';
+  const subject = '✅ Booking Confirmed — Lakmé Salon';
+  const html = `
+    <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width:680px; margin:auto; padding:28px; background: #ffffff; border:1px solid #f1e9de; border-radius:12px;">
+      <div style="display:flex;align-items:center;gap:16px;margin-bottom:8px">
+        <div style="width:56px;height:56px;border-radius:8px;background:linear-gradient(135deg,#f6e7c9,#f0d9b0);display:flex;align-items:center;justify-content:center;font-weight:700;color:#7a5a2a">LK</div>
+        <div>
+          <h1 style="margin:0;font-size:20px;color:#2b2b2b;letter-spacing:0.2px">Booking Confirmed</h1>
+          <p style="margin:2px 0 0;color:#8a8a8a;font-size:13px">Thank you, ${toName} — we look forward to pampering you.</p>
+          <div style="margin-top:6px;display:inline-block;background:linear-gradient(90deg,#f8f2e6,#fff7ec);color:#7a5a2a;padding:6px 10px;border-radius:20px;font-size:12px;font-weight:700;letter-spacing:0.3px">Confirmed via Voice Assistant</div>
         </div>
-      `
-    });
-    console.log('✅ Email sent to:', toEmail);
+      </div>
+      <div style="border-radius:10px;padding:18px;border:1px solid #fbf1e6;background:#fffdfa">
+        <p style="margin:0 0 8px;color:#8a7a5f;font-size:13px">${serviceName}</p>
+        <p style="margin:0;color:#2b2b2b;font-weight:600;font-size:16px">${date} · ${timeSlot}</p>
+        <p style="margin:12px 0 0;color:#c79f49;font-weight:700;font-size:16px">₹${amount}</p>
+      </div>
+      <div style="margin-top:18px;display:flex;gap:12px;align-items:center">
+        <a href="#" style="background:#c9a84c;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;font-weight:600">Manage Booking</a>
+        <span style="color:#9b9b9b;font-size:13px">Reference: <strong style="color:#2b2b2b">#${Math.floor(Math.random()*900000+100000)}</strong></span>
+      </div>
+      <p style="margin-top:18px;color:#9b9b9b;font-size:12px">Need to reschedule or cancel? Reply to this email or call +91 98765 43210</p>
+      <hr style="border:none;border-top:1px solid #f3ebe0;margin:18px 0">
+      <p style="color:#9b9b9b;font-size:12px;margin:0">Lakmé Salon — Luxury hair & beauty services</p>
+    </div>
+  `;
+
+  try {
+    if (hasResend && resend) {
+      await _sendWithResend({ from, to: toEmail, subject, html });
+    } else if (process.env.EMAIL_USER) {
+      await _sendWithSMTP({ from, to: toEmail, subject, html });
+    } else {
+      console.warn('No email provider configured (RESEND_API_KEY or EMAIL_USER)');
+      return false;
+    }
+    console.log('✅ Booking email sent to:', toEmail);
     return true;
   } catch (err) {
-    console.error('❌ Email failed:', err.message);
+    console.error('❌ Booking email failed:', err && err.message ? err.message : err);
     return false;
   }
 }
 
 async function sendReminderEmail({ toEmail, toName, serviceName, timeSlot }) {
-  try {
-    await resend.emails.send({
-      from: 'Lakmé Salon <onboarding@resend.dev>',
-      to: toEmail,
-      subject: '⏰ Reminder: Your Lakmé Appointment in 25 Minutes!',
-      html: `
-        <div style="font-family:Arial;max-width:500px;margin:auto;padding:20px">
-          <h2 style="color:#C9A84C">⏰ See You Soon, ${toName}!</h2>
-          <p>Your appointment is in <strong>25 minutes!</strong></p>
-          <div style="background:#FDF8F0;border-left:4px solid #C9A84C;padding:16px;border-radius:4px;margin:20px 0">
-            <p style="margin:0;font-size:16px">📅 <strong>${serviceName}</strong></p>
-            <p style="margin:8px 0 0;color:#666">Today at <strong>${timeSlot}</strong></p>
-          </div>
-          <p style="color:#999;font-size:12px">Lakmé Salon | +91 98765 43210</p>
+  const from = process.env.EMAIL_FROM || 'Lakmé Salon <no-reply@lakme.example.com>';
+  const subject = '⏰ Reminder: Your Lakmé Appointment in 25 Minutes!';
+  const html = `
+    <div style="font-family:'Helvetica Neue', Arial, sans-serif; max-width:680px;margin:auto;padding:20px;background:#fff;border:1px solid #f7efe3;border-radius:10px">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="width:44px;height:44px;border-radius:8px;background:linear-gradient(135deg,#f6e7c9,#f0d9b0);display:flex;align-items:center;justify-content:center;font-weight:700;color:#7a5a2a">LK</div>
+        <div>
+          <h2 style="margin:0;font-size:16px;color:#2b2b2b">⏰ Reminder — ${toName}</h2>
+          <p style="margin:2px 0 0;color:#8a8a8a;font-size:13px">Your ${serviceName} is coming up soon.</p>
         </div>
-      `
-    });
-    console.log('✅ Reminder sent to:', toEmail);
+      </div>
+      <div style="margin-top:12px;padding:12px;border-radius:8px;background:#fffdfa;border:1px solid #fbf1e6">
+        <p style="margin:0;font-weight:600;color:#2b2b2b">${serviceName}</p>
+        <p style="margin:6px 0 0;color:#7a7a7a">Today · <strong style="color:#2b2b2b">${timeSlot}</strong></p>
+      </div>
+      <p style="margin-top:12px;color:#9b9b9b;font-size:12px">If you need to modify your booking, reply or call +91 98765 43210.</p>
+    </div>
+  `;
+
+  try {
+    if (hasResend && resend) {
+      await _sendWithResend({ from, to: toEmail, subject, html });
+    } else if (process.env.EMAIL_USER) {
+      await _sendWithSMTP({ from, to: toEmail, subject, html });
+    } else {
+      console.warn('No email provider configured (RESEND_API_KEY or EMAIL_USER)');
+      return false;
+    }
+    console.log('✅ Reminder email sent to:', toEmail);
     return true;
   } catch (err) {
-    console.error('❌ Reminder failed:', err.message);
+    console.error('❌ Reminder email failed:', err && err.message ? err.message : err);
     return false;
   }
 }

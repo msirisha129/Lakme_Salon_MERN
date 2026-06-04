@@ -1,136 +1,78 @@
-# 💄 Lakmé Salon — Full Stack MERN App
+# Lakmé Salon MERN Application
 
-A complete luxury salon web application with AI hairstyle advisor, booking system, chatbot, and admin panel.
+A luxury salon management system featuring an AI Beauty Assistant, Voice-activated booking, and automated appointment reminders.
 
----
+## Render Deployment Guide
 
-## 🚀 Quick Start (5 minutes)
+### 1. Backend Configuration
+Deploy the `backend` folder as a **Web Service**.
 
-### Prerequisites
-- Node.js 18+
-- MongoDB (local or Atlas)
+| Variable | Description | Example/Value |
+| :--- | :--- | :--- |
+| `NODE_ENV` | Environment mode | `production` |
+| `PORT` | Server port | `5000` (Render detects this automatically) |
+| `MONGO_URI` | MongoDB Atlas Connection String | `mongodb+srv://...` |
+| `JWT_SECRET` | Secret key for auth tokens | `your_random_long_string` |
+| `GROQ_API_KEY` | API Key from Groq Console (for AI) | `gsk_...` |
+| `RESEND_API_KEY` | API Key from Resend.com (for Email) | `re_...` |
+| `EMAIL_FROM` | Verified sender email in Resend | `onboarding@resend.dev` |
+| `RECAPTCHA_SECRET` | Google reCAPTCHA v3 Secret Key | `6Le...` |
+| `REDIS_URL` | (Optional) Render Redis URL for rate limiting | `rediss://...` |
+| `USER_BOOKINGS_PER_DAY` | Max bookings allowed per user | `3` |
+| `GUEST_EMAIL_BOOKINGS_PER_DAY` | Max bookings per guest email | `2` |
 
----
-
-### 1. Backend Setup
-
-```bash
-cd backend
-npm install
-cp .env.example .env
-# Edit .env — set your MONGO_URI and JWT_SECRET
-npm run dev
-```
-
-> Backend runs on **http://localhost:5000**
->
-> ✅ Auto-seeds: 24 services + admin account on first run
->
-> **Admin login:** admin@lakmesalon.com / Admin@123
-
----
-
-### 2. Frontend Setup
-
-```bash
-cd frontend
-npm install
-npm start
-```
-
-> Frontend runs on **http://localhost:3000**
+#### Optional SMS/WhatsApp (Twilio)
+If you wish to enable mobile notifications:
+| Variable | Description |
+| :--- | :--- |
+| `TWILIO_ACCOUNT_SID` | Your Twilio SID |
+| `TWILIO_AUTH_TOKEN` | Your Twilio Auth Token |
+| `TWILIO_PHONE` | Your Twilio Phone Number |
+| `TWILIO_WHATSAPP` | Your Twilio WhatsApp Number |
 
 ---
 
-## 📱 Pages & Features
+### 2. Frontend Configuration
+Deploy the `frontend` folder as a **Static Site**.
 
-| Page | URL | Description |
-|------|-----|-------------|
-| Home | `/` | Hero, services, AI banner, testimonials |
-| Services | `/services` | Browse all services with category filters |
-| Booking | `/booking` | 4-step appointment booking flow |
-| AI Stylist | `/hairstyle` | AI hairstyle recommendations |
-| Contact | `/contact` | Multi-channel: WhatsApp, Call, Email, SMS |
-| Login | `/login` | Authentication |
-| Register | `/register` | New account creation |
-| Dashboard | `/dashboard` | User bookings, loyalty points, feedback |
-| Admin | `/admin` | Full admin panel (admin only) |
+| Variable | Description | Value |
+| :--- | :--- | :--- |
+| `REACT_APP_API_URL` | The URL of your deployed Backend | `https://your-backend.onrender.com/api` |
+| `REACT_APP_RECAPTCHA_SITE_KEY` | Google reCAPTCHA v3 Site Key | `6Le...` |
+
+**Important:** Ensure your `REACT_APP_API_URL` ends with `/api` as the frontend utilities expect this prefix.
 
 ---
 
-## 🤖 AI Features
+### 3. Key Functionalities implemented
 
-### Hairstyle Advisor (`/hairstyle`)
-- Select face shape, hair type, desired length, occasion
-- Gets top 3 personalized style recommendations
-- Each recommendation includes color suggestion + bookable service
+*   **AI Voice Assistant**: Hands-free booking flow using Web Speech API and Groq LLM.
+*   **Logical Noise Gate**: Frontend audio analyzer to filter background noise during voice interaction.
+*   **Profanity Filtering**: Multi-layer (client & server) rejection of vulgar or irrelevant prompts.
+*   **Booking Validation**: Prevents double-booking same slots and blocks past-date selections.
+*   **Rate Limiting**: Protects your API and prevents spam via Redis or In-Memory sliding windows.
+*   **Email Notifications**: Professional HTML templates for confirmations and reminders.
+*   **Admin Dashboard**: Real-time stats, log monitoring (Booking, User, Error, App), and service management.
 
-### Virtual Assistant Chatbot
-- Floating chat widget on all pages
-- Handles: booking, pricing, services, hours, contact, hairstyle suggestions
-- Quick reply buttons for common questions
-- Navigate-to-page actions
+### 4. Local Setup
 
----
+1.  **Backend**:
+    ```bash
+    cd backend
+    npm install
+    npm start
+    ```
+2.  **Frontend**:
+    ```bash
+    cd frontend
+    npm install
+    npm start
+    ```
 
-## 🔐 API Endpoints
-
-```
-POST   /api/auth/register         Register user
-POST   /api/auth/login            Login
-GET    /api/auth/me               Get current user
-
-GET    /api/services              List services (filter by ?category=Hair)
-POST   /api/services              Create service (admin)
-PUT    /api/services/:id          Update service (admin)
-DELETE /api/services/:id          Delete service (admin)
-
-GET    /api/bookings/slots?date=  Get available time slots
-POST   /api/bookings              Create booking
-GET    /api/bookings/my           My bookings
-PUT    /api/bookings/:id/cancel   Cancel booking
-PUT    /api/bookings/:id/feedback Submit feedback
-GET    /api/bookings/admin/all    All bookings (admin)
-PUT    /api/bookings/:id/status   Update status (admin)
-
-POST   /api/ai/hairstyle          AI hairstyle recommendations
-POST   /api/ai/chat               Chatbot response
-
-POST   /api/contact               Send contact message
-GET    /api/admin/stats           Dashboard stats (admin)
-```
+### 5. Troubleshooting
+*   **Microphone not working?** Ensure the site is served over `https`. Browsers block microphone access on insecure `http` connections.
+*   **Emails not sending?** Verify your `RESEND_API_KEY` and ensure the `EMAIL_FROM` address is verified in your Resend dashboard.
+*   **Reminders not firing?** On Render's Free Tier, services spin down after inactivity. Background cron jobs (`reminderJob.js`) will not run while the service is asleep.
 
 ---
-
-## 🎨 Design System
-
-| Token | Value | Usage |
-|-------|-------|-------|
-| `--gold` | #C9A84C | Primary accent |
-| `--rose` | #C8003B | Lakmé red |
-| `--black` | #0A0A0A | Dark backgrounds |
-| `--cream` | #FDF8F0 | Light backgrounds |
-| Font Display | Cormorant Garamond | Headings |
-| Font Body | DM Sans | Body text |
-
----
-
-## 🚢 Deployment
-
-### Backend (Render)
-1. Create new Web Service on Render
-2. Connect GitHub repo, set root to `/backend`
-3. Build: `npm install` | Start: `npm start`
-4. Add environment variables from `.env.example`
-5. Set MONGO_URI to MongoDB Atlas connection string
-
-### Frontend (Vercel)
-1. Import repo to Vercel, set root to `/frontend`
-2. Set `REACT_APP_API_URL` to your Render backend URL
-3. Update `proxy` in `package.json` or use env variable
-
----
-
-## 📊 Demo Credentials
-- **Admin:** admin@lakmesalon.com / Admin@123
-- **User:** Register any account at `/register`
+*Developed for Lakmé Salon — Premium Beauty Experience.*

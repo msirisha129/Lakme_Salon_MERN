@@ -4,6 +4,22 @@ const Booking = require('../models/Booking');
 const User = require('../models/User');
 const Service = require('../models/Service');
 const { protect, adminOnly } = require('../middleware/auth');
+const { sendBookingConfirmation } = require('../middleware/emailService');
+const startReminderJob = require('../middleware/reminderJob');
+
+// Admin: trigger reminder job immediately (for testing)
+router.post('/run-reminders', protect, adminOnly, async (req, res) => {
+  try {
+    if (!startReminderJob || typeof startReminderJob.runNow !== 'function') {
+      return res.status(500).json({ success: false, message: 'Reminder runner not available' });
+    }
+    await startReminderJob.runNow();
+    return res.json({ success: true, message: 'Reminder job executed' });
+  } catch (err) {
+    console.error('Run reminders error:', err && err.message);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
 
 // Dashboard stats
 router.get('/stats', protect, adminOnly, async (req, res) => {
@@ -83,4 +99,57 @@ router.get('/logs', protect, adminOnly, async (req, res) => {
   }
 });
 
+// Dev: Send a test booking confirmation email (protected)
+router.post('/test-email', protect, async (req, res) => {
+  try {
+    const { toEmail } = req.body;
+    const user = req.user;
+    const target = toEmail || user?.email;
+    if (!target) return res.status(400).json({ success: false, message: 'toEmail or authenticated user required' });
+
+    const sent = await sendBookingConfirmation({
+      toEmail: target,
+      toName: user?.name || 'Test User',
+      serviceName: 'Test Service',
+      date: new Date().toLocaleDateString('en-IN'),
+      timeSlot: '12:00 PM',
+      amount: '0',
+      loyaltyPoints: 0
+    });
+    if (sent) return res.json({ success: true, message: 'Test email sent' });
+    return res.status(500).json({ success: false, message: 'Failed to send test email' });
+  } catch (err) {
+    console.error('Test email error:', err.message);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Dev-only: Unauthenticated test endpoint (disabled in production)
+router.post('/test-email/dev', async (req, res) => {
+  try {
+    if (process.env.NODE_ENV === 'production') {
+      return res.status(403).json({ success: false, message: 'Not allowed in production' });
+    }
+    const { toEmail } = req.body;
+    const target = toEmail || process.env.TEST_EMAIL;
+    if (!target) return res.status(400).json({ success: false, message: 'toEmail or TEST_EMAIL env required' });
+
+    const sent = await sendBookingConfirmation({
+      toEmail: target,
+      toName: 'Dev Test',
+      serviceName: 'Dev Service',
+      date: new Date().toLocaleDateString('en-IN'),
+      timeSlot: '12:00 PM',
+      amount: '0',
+      loyaltyPoints: 0
+    });
+    if (sent) return res.json({ success: true, message: 'Dev test email sent' });
+    return res.status(500).json({ success: false, message: 'Failed to send dev test email' });
+  } catch (err) {
+    console.error('Dev test email error:', err.message);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 module.exports = router;
+

@@ -4,7 +4,6 @@ import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Navbar from './components/Navbar';
 import Chatbot from './components/Chatbot';
-import AIAssistantSection from './components/AIAssistantSection';
 import Home from './pages/Home';
 import Services from './pages/Services';
 import Booking from './pages/Booking';
@@ -44,9 +43,9 @@ function AppContent() {
       </Routes>
 
       <Chatbot
-  externalOpen={openChatbot}
-  onExternalOpenHandled={() => setOpenChatbot(false)}
-/>
+        externalOpen={openChatbot}
+        onExternalOpenHandled={() => setOpenChatbot(false)}
+      />
 
       {/* ── Floating WhatsApp (right) ── */}
       <a

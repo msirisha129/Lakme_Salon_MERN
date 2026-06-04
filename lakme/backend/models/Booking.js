@@ -1,7 +1,11 @@
 const mongoose = require('mongoose');
 
 const bookingSchema = new mongoose.Schema({
-  user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  // If booking made by a registered user, `user` is set.
+  // For guest bookings (voice assistant without login), `user` may be null and `guestEmail`/`guestName` used.
+  user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  guestEmail: { type: String },
+  guestName: { type: String },
   service: { type: mongoose.Schema.Types.ObjectId, ref: 'Service', required: true },
   stylist: { type: String, default: 'Any Available' },
   date: { type: Date, required: true },
@@ -22,6 +26,7 @@ const bookingSchema = new mongoose.Schema({
     priorSent: { type: Boolean, default: false },
     postSent: { type: Boolean, default: false }
   },
+  reminderSent: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now }
 });
 

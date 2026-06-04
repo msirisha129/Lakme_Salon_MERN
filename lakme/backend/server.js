@@ -11,8 +11,6 @@ dotenv.config();
 const app = express();
 
 // Middleware
-
-
 app.use(cors({
   origin: true,
   credentials: true
@@ -40,18 +38,18 @@ app.get('/api/health', (req, res) => res.json({ status: 'OK', message: 'Lakme AP
 // Connect MongoDB
 const connectDB = async () => {
   try {
-  await mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/lakme_salon', {
-  serverSelectionTimeoutMS: 30000,
-  socketTimeoutMS: 60000,
-  connectTimeoutMS: 30000,
-  maxPoolSize: 10,
-  retryWrites: true,
-});
+    await mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/lakme_salon', {
+      serverSelectionTimeoutMS: 30000,
+      socketTimeoutMS: 60000,
+      connectTimeoutMS: 30000,
+      maxPoolSize: 10,
+      retryWrites: true,
+    });
     console.log('✅ MongoDB connected');
     require('./middleware/seeder');
   } catch (err) {
     console.error('MongoDB error:', err.message);
-    setTimeout(connectDB, 5000); // retry every 5 seconds
+    setTimeout(connectDB, 5000);
   }
 };
 
@@ -63,8 +61,34 @@ mongoose.connection.on('disconnected', () => {
 const PORT = process.env.PORT || 5000;
 
 connectDB();
-startReminderJob();
 
-app.listen(PORT, () => console.log(`🚀 Lakme API running on port ${PORT}`));
+// start reminder job and keep reference so we can stop it on shutdown
+const reminderTask = startReminderJob();
 
+const server = app.listen(PORT, () => console.log(`🚀 Lakme API running on port ${PORT}`));
 
+server.on('error', (err) => {
+  if (err && err.code === 'EADDRINUSE') {
+    console.error(`Port ${PORT} already in use. Another process may be running.`);
+    process.exit(1);
+  }
+  console.error('Server error:', err);
+});
+
+function gracefulShutdown() {
+  console.log('Shutting down server...');
+  if (reminderTask && typeof reminderTask.stop === 'function') {
+    try { reminderTask.stop(); console.log('Stopped reminder job'); } catch (e) { console.warn('Failed to stop reminder job', e); }
+  }
+  server.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
+  // force exit if not closed in 5s
+  setTimeout(() => process.exit(1), 5000);
+}
+
+process.on('SIGINT', gracefulShutdown);
+process.on('SIGTERM', gracefulShutdown);
+process.on('uncaughtException', (err) => { console.error('Uncaught exception:', err); gracefulShutdown(); });
+process.on('unhandledRejection', (reason) => { console.error('Unhandled rejection:', reason); });

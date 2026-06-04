@@ -26,8 +26,12 @@ export default function Chatbot({ externalOpen, onExternalOpenHandled }) {
   const [selectedImage, setSelectedImage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [bookingState, setBookingState] = useState(null);
-// null | 'askService' | 'askDate' | 'askTime' | 'confirm'
+  // null | 'askService' | 'askDate' | 'askTime' | 'confirm'
   const [bookingData, setBookingData] = useState({});
+
+  // FIX 1: bookingDataRef must be declared at the top level, not inside any function
+  const bookingDataRef = useRef(bookingData);
+  useEffect(() => { bookingDataRef.current = bookingData; }, [bookingData]);
   
   const bottomRef = useRef();
   const fileInputRef = useRef();
@@ -81,8 +85,11 @@ const send = async (customMsg = null) => {
     }
 
     if (bookingState === 'askTime') {
+      // FIX 2: Build the complete booking object here and store it in the ref
+      // so the confirm step can read all fields including 'time' without stale state
       const newData = { ...bookingData, time: msg };
       setBookingData(newData);
+      bookingDataRef.current = newData; // sync ref immediately, don't wait for effect
       setBookingState('confirm');
       await new Promise(r => setTimeout(r, 600));
       setTyping(false);
@@ -97,6 +104,16 @@ const send = async (customMsg = null) => {
     }
 
     if (bookingState === 'confirm') {
+      // Allow user to ask the assistant to "repeat" the booking summary
+      if (/\b(repeat|say again)\b/i.test(msg)) {
+        const bd = bookingDataRef.current;
+        const summary = `Here's your booking summary again:\n\nService: ${bd.service}\nDate: ${bd.date}\nTime: ${bd.time}\n\nShall I confirm this booking? Reply yes or no.`;
+        setMessages(m => [...m, { from: 'bot', text: summary, bookingSummary: bd }]);
+        setLoading(false);
+        setTyping(false);
+        return;
+      }
+
       if (/yes|confirm|ok|sure|yeah|yep/i.test(msg)) {
         // Check if user is logged in
         const token = localStorage.getItem('lakme_token');
@@ -116,14 +133,16 @@ const send = async (customMsg = null) => {
           return;
         }
 
-        // Make real booking
+        // FIX 3: Read from ref so we always get the latest values including 'time'
+        const bd = bookingDataRef.current;
+
         try {
           const { data } = await API.post('/ai/chat-book', {
-          serviceName: bookingData.service,
-             dateText: bookingData.date,
-            timeSlot: bookingData.time,
-});
-console.log('Booking response:', data);
+            serviceName: bd.service,
+            dateText: bd.date,
+            timeSlot: bd.time,
+          });
+          console.log('Booking response:', data);
 
           setBookingState(null);
           setBookingData({});
@@ -140,9 +159,11 @@ console.log('Booking response:', data);
             setMessages(m => [...m, { from: 'bot', text: `Sorry, couldn't book: ${data.message}. Please try the booking page!` }]);
           }
         } catch (err) {
+          console.error('Booking error:', err);
           setBookingState(null);
           setTyping(false);
-          setMessages(m => [...m, { from: 'bot', text: "Booking failed. Please try again or use the Book Now page! 💄" }]);
+          const errMsg = err?.response?.data?.message || "Booking failed. Please try again or use the Book Now page! 💄";
+          setMessages(m => [...m, { from: 'bot', text: errMsg }]);
         }
         setLoading(false);
         return;
@@ -188,6 +209,8 @@ console.log('Booking response:', data);
 };
 
   const analyzeImage = async (additionalContext) => {
+    // FIX 1 (continued): Removed the illegally-placed useRef and useEffect that
+    // were inside this function — they are now correctly declared at the top of the component
     try {
       const formData = new FormData();
       formData.append('image', selectedImage);
@@ -294,20 +317,19 @@ console.log('Booking response:', data);
   }}
   onMouseEnter={e => e.currentTarget.style.background = 'linear-gradient(135deg, #E2C97E, #C9A84C)'}
   onMouseLeave={e => e.currentTarget.style.background = 'linear-gradient(135deg, #C9A84C, #9A7A30)'}
->
- <Sparkles size={14} color="white" />
-  <span style={{
-    color: 'white',
-    fontSize: 11,
-    fontWeight: 600,
-    letterSpacing: 2,
-    textTransform: 'uppercase',
-    fontFamily: 'var(--font-body)',
-    whiteSpace: 'nowrap',
-  }}>
-    {open ? 'Close Chat' : 'Beauty AI'}
-  </span>
-  <div style={{
+  >
+    <Sparkles size={14} color="white" />
+    <span style={{
+      fontSize: 11,
+      fontWeight: 600,
+      letterSpacing: 2,
+      textTransform: 'uppercase',
+      fontFamily: 'var(--font-body)',
+      whiteSpace: 'nowrap'
+    }}>
+      {open ? 'Close Chat' : 'Beauty AI'}
+    </span>
+    <div style={{
     width: 6, height: 6, borderRadius: '50%',
     background: '#25D366',
     animation: 'pulse 2s infinite',
@@ -660,10 +682,10 @@ console.log('Booking response:', data);
         @keyframes bounce {
           0%, 100% { transform: translateY(0); }
           50% { transform: translateY(-4px); }
-          @keyframes pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.6; transform: scale(1.3); }
-}
+        }
+        @keyframes pulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.6; transform: scale(1.3); }
         }
       `}</style>
     </>
