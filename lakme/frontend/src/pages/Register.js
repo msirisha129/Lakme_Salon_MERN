@@ -39,8 +39,9 @@ export default function Register() {
       toast.success('Welcome to Lakmé! 💄');
       navigate('/');
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Registration failed');
-    } finally {
+  console.error(err);
+  toast.error(err.serverMessage || err.message || 'Registration failed');
+} finally {
       setLoading(false);
     }
   };
