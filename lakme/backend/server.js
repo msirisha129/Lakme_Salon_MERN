@@ -12,7 +12,11 @@ const app = express();
 
 // Middleware
 app.use(cors({
-  origin: true,
+  origin: [
+    'https://lakme-frontend.onrender.com',
+    'https://lakme-salon.onrender.com',
+    'http://localhost:3000'
+  ],
   credentials: true
 }));
 app.use((req, res, next) => {
