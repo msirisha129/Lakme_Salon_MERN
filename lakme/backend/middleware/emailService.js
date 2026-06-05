@@ -57,6 +57,7 @@ async function sendBookingConfirmation({ toEmail, toName, serviceName, date, tim
   try {
     if (hasResend && resend) {
       await _sendWithResend({ from, to: toEmail, subject, html });
+      console.log("EMAIL SENT TO:", toEmail);
     } else if (process.env.EMAIL_USER) {
       await _sendWithSMTP({ from, to: toEmail, subject, html });
     } else {
