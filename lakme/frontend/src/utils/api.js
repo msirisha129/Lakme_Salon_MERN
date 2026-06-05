@@ -1,39 +1,36 @@
-import axios from 'axios';
-
-// Resolve backend URL for development:
-// 1) use REACT_APP_API_URL if provided
-// 2) if running on localhost, assume backend on port 5001 (user switched backend there)
-// 3) fallback to relative '/api'
+// Use axios' browser build to avoid webpack/node core polyfill issues
+// Lightweight fetch-based API wrapper to avoid bundling node-only modules (axios pulls node adapters)
 const defaultHost = window.location.hostname;
-const devBackend = process.env.REACT_APP_API_URL || (defaultHost === 'localhost' || defaultHost === '127.0.0.1' ? `http://${defaultHost}:5000/api` : '/api');
-const API = axios.create({ baseURL: devBackend });
+const BASE = process.env.REACT_APP_API_URL || (defaultHost === 'localhost' || defaultHost === '127.0.0.1' ? `http://${defaultHost}:5000/api` : '/api');
 
-API.interceptors.request.use(config => {
+function authHeaders() {
   const token = localStorage.getItem('lakme_token');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
 
-API.interceptors.response.use(
-  res => res,
-  err => {
-    // Friendly message for network errors
-    if (!err.response) {
-      console.error('API Network Error:', err.message);
-      // attach a friendly message
-      err.message = 'Network Error: Unable to reach backend. Check server (backend) is running.';
-    }
-    // attach server-provided message for easier handling in UI
-    if (err.response && err.response.data && err.response.data.message) {
-      err.serverMessage = err.response.data.message;
-    }
-    if (err.response?.status === 401) {
-      localStorage.removeItem('lakme_token');
-      localStorage.removeItem('lakme_user');
-      window.location.href = '/login';
-    }
-    return Promise.reject(err);
+async function handleRes(res) {
+  const text = await res.text();
+  let data = null;
+  try { data = text ? JSON.parse(text) : null; } catch (e) { data = text; }
+  if (!res.ok) {
+    const err = new Error(data?.message || res.statusText || 'API Error');
+    err.status = res.status;
+    err.serverMessage = data?.message;
+    throw err;
   }
-);
+  return { data };
+}
 
-export default API; 
+const API = {
+  async request(path, opts = {}) {
+    const headers = { 'Content-Type': 'application/json', ...authHeaders(), ...(opts.headers || {}) };
+    const res = await fetch(`${BASE}${path}`, { ...opts, headers, credentials: 'include' });
+    return handleRes(res);
+  },
+  get(path) { return API.request(path, { method: 'GET' }); },
+  post(path, body) { return API.request(path, { method: 'POST', body: JSON.stringify(body) }); },
+  put(path, body) { return API.request(path, { method: 'PUT', body: JSON.stringify(body) }); },
+  delete(path) { return API.request(path, { method: 'DELETE' }); },
+};
+
+export default API;

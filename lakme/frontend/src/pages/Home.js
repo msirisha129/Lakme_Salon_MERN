@@ -82,32 +82,28 @@ export default function Home({ onOpenChat }) {
   return (
     <div>
       {/* ── HERO (YOUR VERSION — UNTOUCHED) ─────────────────────────────── */}
-      <section style={{
-        minHeight: '100vh', position: 'relative', display: 'flex', alignItems: 'center',
-        backgroundImage: "url('/images/salon-image.png')",
-        backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat', overflow: 'hidden'
-      }}>
+      <section className="hero" style={{ backgroundImage: `url(${process.env.PUBLIC_URL}/images/salon-image.png)`, minHeight: '100vh' }}>
         <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1 }} />
         <div style={{ position: 'absolute', inset: 0, opacity: 0.05, backgroundImage: `repeating-linear-gradient(45deg, var(--gold) 0, var(--gold) 1px, transparent 0, transparent 50%)`, backgroundSize: '30px 30px' }} />
         <div style={{ position: 'absolute', top: '20%', right: '15%', width: 400, height: 400, borderRadius: '50%', background: 'radial-gradient(circle, rgba(201,168,76,0.12) 0%, transparent 70%)', filter: 'blur(40px)' }} />
         <div style={{ position: 'absolute', bottom: '20%', left: '10%', width: 300, height: 300, borderRadius: '50%', background: 'radial-gradient(circle, rgba(200,0,59,0.08) 0%, transparent 70%)', filter: 'blur(40px)' }} />
 
-        <div className="container" style={{ position: 'relative', zIndex: 2, paddingTop: 'clamp(120px, 20vh, 220px)', paddingBottom: 48 }}>
-          <div style={{ maxWidth: 720 }}>
+        <div className="container" style={{ position: 'relative', zIndex: 2, paddingTop: 'clamp(120px, 20vh, 220px)', paddingBottom: 28 }}>
+          <div style={{ maxWidth: 720, paddingRight: 12 }}>
             <span style={{ fontSize: 11, letterSpacing: 5, textTransform: 'uppercase', color: 'var(--gold)', fontWeight: 500 }}>✦ The Art of Beauty ✦</span>
-            <h1 style={{ color: 'white', marginTop: 20, marginBottom: 24 }}>
+            <h1 style={{ color: 'white', marginTop: 12, marginBottom: 18, wordBreak: 'break-word' }}>
               Where Beauty<br /><em style={{ color: 'var(--gold)', fontStyle: 'italic' }}>Becomes Art</em>
             </h1>
             <p style={{ fontSize: 18, color: 'rgba(255,255,255,0.65)', maxWidth: 540, lineHeight: 1.8, marginBottom: 48 }}>
               India's most trusted salon experience. Expert stylists, premium products, and personalized beauty rituals crafted just for you.
             </p>
-            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-              <Link to="/booking" className="btn-primary" style={{ fontSize: 12 }}>Book Appointment <ArrowRight size={14} /></Link>
-              <Link to="/services" className="btn-outline" style={{ fontSize: 12, borderColor: 'rgba(201,168,76,0.5)', color: 'var(--gold)' }}>Explore Services</Link>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+              <Link to="/booking" className="btn-primary" style={{ fontSize: (typeof window !== 'undefined' && window.innerWidth < 600) ? 13 : 12, padding: (typeof window !== 'undefined' && window.innerWidth < 600) ? '10px 20px' : undefined }}>Book Appointment <ArrowRight size={14} /></Link>
+              <Link to="/services" className="btn-outline" style={{ fontSize: (typeof window !== 'undefined' && window.innerWidth < 600) ? 13 : 12, borderColor: 'rgba(201,168,76,0.5)', color: 'var(--gold)', padding: (typeof window !== 'undefined' && window.innerWidth < 600) ? '9px 18px' : undefined }}>Explore Services</Link>
             </div>
               <div style={{ display: 'flex', gap: 20, marginTop: 40, borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 20, flexWrap: 'wrap' }}>
               {[{ icon: <Phone size={14} />, text: '+91 98765 43210' }, { icon: <MapPin size={14} />, text: 'Multiple Locations' }, { icon: <Clock size={14} />, text: '9 AM – 8 PM Daily' }].map((item, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'rgba(255,255,255,0.5)', fontSize: 13 }}>
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'rgba(255,255,255,0.6)', fontSize: (typeof window !== 'undefined' && window.innerWidth < 600) ? 12 : 13 }}>
                   <span style={{ color: 'var(--gold)' }}>{item.icon}</span>{item.text}
                 </div>
               ))}

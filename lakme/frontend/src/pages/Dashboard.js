@@ -65,7 +65,7 @@ export default function Dashboard() {
           </div>
 
           {/* Stats */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginTop: 32 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16, marginTop: 32 }}>
             {[
               { label: 'Total Bookings', val: bookings.length, icon: '📅' },
               { label: 'Upcoming', val: upcoming.length, icon: '⏰' },
