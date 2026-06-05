@@ -232,6 +232,8 @@ const send = async (customMsg = null) => {
     // were inside this function — they are now correctly declared at the top of the component
     try {
       const formData = new FormData();
+      console.log(selectedImage);
+console.log(selectedImage instanceof File);   
       formData.append('image', selectedImage);
       if (additionalContext) {
         formData.append('preferences', additionalContext);
