@@ -12,13 +12,25 @@ const app = express();
 
 // Middleware
 app.use(cors({
-  origin: [
-    'https://lakme-frontend.onrender.com',
-    'https://lakme-salon.onrender.com',
-    'http://localhost:3000'
-  ],
-  credentials: true
+  origin: (origin, cb) => {
+    // allow requests with no origin (e.g. curl, server-to-server)
+    if (!origin) return cb(null, true);
+    const allowed = [
+      'https://lakme-frontend.onrender.com',
+      'https://lakme-salon.onrender.com',
+      'http://localhost:3000'
+    ];
+    if (allowed.indexOf(origin) !== -1) return cb(null, true);
+    return cb(new Error('CORS not allowed'));
+  },
+  methods: ['GET','HEAD','PUT','PATCH','POST','DELETE','OPTIONS'],
+  allowedHeaders: ['Content-Type','Authorization','X-Requested-With'],
+  credentials: true,
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 }));
+// Ensure OPTIONS preflight is handled
+app.options('*', cors());
 app.use((req, res, next) => {
   console.log("Origin:", req.headers.origin);
   next();
