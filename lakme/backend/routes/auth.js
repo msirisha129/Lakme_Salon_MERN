@@ -11,6 +11,7 @@ const signToken = (id) => jwt.sign({ id }, process.env.JWT_SECRET || 'lakme_secr
 // Register
 router.post('/register', async (req, res) => {
   try {
+    console.log('Register request body:', req.body);
     const { name, email, phone, password } = req.body;
     const exists = await User.findOne({ email });
     if (exists) return res.status(400).json({ success: false, message: 'Email already registered' });
@@ -18,6 +19,10 @@ router.post('/register', async (req, res) => {
     const token = signToken(user._id);
     res.status(201).json({ success: true, token, user: { id: user._id, name: user.name, email: user.email, role: user.role, loyaltyPoints: user.loyaltyPoints } });
   } catch (err) {
+    console.error('Register error:', err && err.message);
+    if (err && err.name === 'ValidationError') {
+      return res.status(400).json({ success: false, message: err.message });
+    }
     res.status(500).json({ success: false, message: err.message });
   }
 });
