@@ -286,6 +286,9 @@ router.post('/chat', moderatePrompt, async (req, res) => {
 // Image analysis endpoint for hairstyle suggestions
 router.post('/analyze-image', upload.single('image'), moderatePrompt, async (req, res) => {
   try {
+    console.log("=== IMAGE DEBUG ===");
+    console.log("FILE:", req.file);
+    console.log("BODY:", req.body);
     if (!req.file) {
       return res.status(400).json({ 
         success: false, 
