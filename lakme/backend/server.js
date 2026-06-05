@@ -53,6 +53,9 @@ app.use('/api/contact', require('./routes/contact'));
 app.use('/api/ai', require('./routes/ai'));
 app.use('/api/admin', require('./routes/admin'));
 
+app.get('/test123', (req, res) => {
+  res.send('SIRISHA_TEST');
+});
 // Health check
 app.get('/api/health', (req, res) => res.json({ status: 'OK', message: 'Lakme API running' }));
 
