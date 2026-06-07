@@ -40,10 +40,10 @@ const API = {
       headers['Content-Type'] = 'application/json';
     }
 
-    const res = await fetch(`${BASE}${path}`, {
+      const res = await fetch(`${BASE}${path}`, { 
       ...opts,
       headers,
-      credentials: 'include'
+        // credentials: 'include' // Removed to avoid strict CORS preflight requirements
     });
 
     return handleRes(res);

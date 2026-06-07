@@ -1,5 +1,6 @@
 const { Resend } = require('resend');
 const nodemailer = require('nodemailer');
+const fetch = require('node-fetch');
 
 const hasResend = !!process.env.RESEND_API_KEY;
 let resend;
@@ -7,9 +8,38 @@ if (hasResend) {
   try { resend = new Resend(process.env.RESEND_API_KEY); } catch (e) { resend = null; }
 }
 
+const hasBrevo = !!process.env.BREVO_API_KEY;
+
 async function _sendWithResend({ from, to, subject, html }) {
   if (!resend) throw new Error('Resend not configured');
   return await resend.emails.send({ from, to, subject, html });
+}
+
+async function _sendWithBrevo({ from, to, subject, html }) {
+  if (!process.env.BREVO_API_KEY) throw new Error('Brevo API key not configured');
+  const payload = {
+    sender: { name: from.split('<')[0].trim(), email: (from.match(/<([^>]+)>/) || [])[1] || from },
+    to: [{ email: to }],
+    subject,
+    htmlContent: html
+  };
+
+  const resp = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'api-key': process.env.BREVO_API_KEY
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!resp.ok) {
+    const text = await resp.text();
+    const err = new Error(`Brevo send failed: ${resp.status} ${text}`);
+    err.status = resp.status;
+    throw err;
+  }
+  return await resp.json();
 }
 
 async function _sendWithSMTP({ from, to, subject, html }) {
@@ -55,13 +85,17 @@ async function sendBookingConfirmation({ toEmail, toName, serviceName, date, tim
   `;
 
   try {
-    if (hasResend && resend) {
+    if (hasBrevo) {
+      await _sendWithBrevo({ from, to: toEmail, subject, html });
+      console.log('EMAIL SENT (Brevo) TO:', toEmail);
+    } else if (hasResend && resend) {
       await _sendWithResend({ from, to: toEmail, subject, html });
-      console.log("EMAIL SENT TO:", toEmail);
+      console.log('EMAIL SENT (Resend) TO:', toEmail);
     } else if (process.env.EMAIL_USER) {
       await _sendWithSMTP({ from, to: toEmail, subject, html });
+      console.log('EMAIL SENT (SMTP) TO:', toEmail);
     } else {
-      console.warn('No email provider configured (RESEND_API_KEY or EMAIL_USER)');
+      console.warn('No email provider configured (BREVO_API_KEY, RESEND_API_KEY or EMAIL_USER)');
       return false;
     }
     console.log('✅ Booking email sent to:', toEmail);
@@ -93,12 +127,14 @@ async function sendReminderEmail({ toEmail, toName, serviceName, timeSlot }) {
   `;
 
   try {
-    if (hasResend && resend) {
+    if (hasBrevo) {
+      await _sendWithBrevo({ from, to: toEmail, subject, html });
+    } else if (hasResend && resend) {
       await _sendWithResend({ from, to: toEmail, subject, html });
     } else if (process.env.EMAIL_USER) {
       await _sendWithSMTP({ from, to: toEmail, subject, html });
     } else {
-      console.warn('No email provider configured (RESEND_API_KEY or EMAIL_USER)');
+      console.warn('No email provider configured (BREVO_API_KEY, RESEND_API_KEY or EMAIL_USER)');
       return false;
     }
     console.log('✅ Reminder email sent to:', toEmail);
