@@ -75,6 +75,14 @@ router.post('/', protect, async (req, res) => {
    // Send booking confirmation email
 const { sendBookingConfirmation } = require('../middleware/emailService');
 const userDoc = await User.findById(req.user._id);
+const source = 'Website';
+console.log("BOOKING EMAIL DEBUG", {
+  bookingId: booking?._id,
+  email: booking?.email,
+  name: booking?.name,
+  source,
+  requestBody: req.body
+});
 // log if email failed
 try {
   const sent = await sendBookingConfirmation({
@@ -84,7 +92,8 @@ try {
     date: new Date(date).toLocaleDateString('en-IN', {weekday:'long', day:'numeric', month:'long'}),
     timeSlot,
     amount: service.price.toLocaleString(),
-    loyaltyPoints: Math.floor(service.price / 10)
+    loyaltyPoints: Math.floor(service.price / 10),
+    source
   });
   if (!sent) console.warn('Booking confirmation email not sent (bookings.create) for user', req.user ? req.user._id : null);
 } catch (e) { console.error('Booking email error:', e.message); }

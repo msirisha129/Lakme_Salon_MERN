@@ -875,8 +875,8 @@ function VoiceAssistantModal({ onClose }) {
           saveDraft(data);
           saveUserData({ name: data.name, phone: data.phone, email: data.email });
 
-          if (token) {
-              var bookResp = await API.post('/ai/voice-book', { serviceName: data.service, dateText: data.date, timeSlot: data.time });
+            if (token) {
+              var bookResp = await API.post('/ai/chat-book', { serviceName: data.service, dateText: data.date, timeSlot: data.time });
               var bookData = bookResp.data;
               console.log('AI booking response received:', bookData);
               if (bookData && bookData.success) {
@@ -916,7 +916,7 @@ function VoiceAssistantModal({ onClose }) {
           console.log('Guest booking response received:', guestResp.data);
           var guestData = guestResp.data;
           if (guestData && guestData.success) {
-              var successMsg2 = '✅ Excellent! Your booking is confirmed and a confirmation email has been sent to ' + data.email + '. Confirmed via Voice Assistant — thank you for choosing Lakmé Salon!';
+              var successMsg2 = '✅ Excellent! Your booking is confirmed and a confirmation email has been sent to ' + data.email + '. Booking Confirmed — thank you for choosing Lakmé Salon!';
             addMessage('assistant', successMsg2);
             speakGroq(successMsg2);
             localStorage.removeItem('lakme_booking_draft');

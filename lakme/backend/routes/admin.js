@@ -107,6 +107,14 @@ router.post('/test-email', protect, async (req, res) => {
     const target = toEmail || user?.email;
     if (!target) return res.status(400).json({ success: false, message: 'toEmail or authenticated user required' });
 
+    const source = 'Admin';
+    console.log("BOOKING EMAIL DEBUG", {
+      bookingId: null,
+      email: target,
+      name: user?.name || 'Test User',
+      source,
+      requestBody: req.body
+    });
     const sent = await sendBookingConfirmation({
       toEmail: target,
       toName: user?.name || 'Test User',
@@ -114,7 +122,8 @@ router.post('/test-email', protect, async (req, res) => {
       date: new Date().toLocaleDateString('en-IN'),
       timeSlot: '12:00 PM',
       amount: '0',
-      loyaltyPoints: 0
+      loyaltyPoints: 0,
+      source
     });
     if (sent) return res.json({ success: true, message: 'Test email sent' });
     return res.status(500).json({ success: false, message: 'Failed to send test email' });
@@ -134,6 +143,14 @@ router.post('/test-email/dev', async (req, res) => {
     const target = toEmail || process.env.TEST_EMAIL;
     if (!target) return res.status(400).json({ success: false, message: 'toEmail or TEST_EMAIL env required' });
 
+    const source = 'Admin';
+    console.log("BOOKING EMAIL DEBUG", {
+      bookingId: null,
+      email: target,
+      name: 'Dev Test',
+      source,
+      requestBody: req.body
+    });
     const sent = await sendBookingConfirmation({
       toEmail: target,
       toName: 'Dev Test',
@@ -141,7 +158,8 @@ router.post('/test-email/dev', async (req, res) => {
       date: new Date().toLocaleDateString('en-IN'),
       timeSlot: '12:00 PM',
       amount: '0',
-      loyaltyPoints: 0
+      loyaltyPoints: 0,
+      source
     });
     if (sent) return res.json({ success: true, message: 'Dev test email sent' });
     return res.status(500).json({ success: false, message: 'Failed to send dev test email' });

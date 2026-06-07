@@ -59,46 +59,92 @@ async function _sendWithSMTP({ from, to, subject, html }) {
 async function sendBookingConfirmation({ toEmail, toName, serviceName, date, timeSlot, amount, loyaltyPoints, source }) {
         const from = process.env.EMAIL_FROM || 'Lakmé Salon <no-reply@lakme.example.com>';
         const subject = '✅ Booking Confirmed — Lakmé Salon';
-        const html = \`
+        // sanitize source: only allow known sources to avoid incorrect badges
+        const allowedSources = {
+          'Voice Assistant': 'Voice Assistant',
+          'Chat Assistant': 'Chat Assistant',
+          'Website': 'Website',
+          'Admin': 'Admin'
+        };
+        const displaySource = allowedSources[source] || null;
+        const badge = `<div style="margin-top:6px;display:inline-block;background:linear-gradient(90deg,#f8f2e6,#fff7ec);color:#7a5a2a;padding:6px 10px;border-radius:20px;font-size:12px;font-weight:700;letter-spacing:0.3px">Booking Confirmed</div>`;
+        const html = `
           <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width:680px; margin:auto; padding:28px; background: #ffffff; border:1px solid #f1e9de; border-radius:12px;">
             <div style="display:flex;align-items:center;gap:16px;margin-bottom:8px">
               <div style="width:56px;height:56px;border-radius:8px;background:linear-gradient(135deg,#f6e7c9,#f0d9b0);display:flex;align-items:center;justify-content:center;font-weight:700;color:#7a5a2a">LK</div>
               <div>
                 <h1 style="margin:0;font-size:20px;color:#2b2b2b;letter-spacing:0.2px">Booking Confirmed</h1>
                 <p style="margin:2px 0 0;color:#8a8a8a;font-size:13px">Thank you, ${toName} — we look forward to pampering you.</p>
-                ${source ? \`<div style="margin-top:6px;display:inline-block;background:linear-gradient(90deg,#f8f2e6,#fff7ec);color:#7a5a2a;padding:6px 10px;border-radius:20px;font-size:12px;font-weight:700;letter-spacing:0.3px">Confirmed via \${source}</div>\` : ''}
+                ${badge}
               </div>
             </div>
             <div style="border-radius:10px;padding:18px;border:1px solid #fbf1e6;background:#fffdfa">
-              <p style="margin:0 0 8px;color:#8a7a5f;font-size:13px">\${serviceName}</p>
-              <p style="margin:0;color:#2b2b2b;font-weight:600;font-size:16px">\${date} · \${timeSlot}</p>
-              <p style="margin:12px 0 0;color:#c79f49;font-weight:700;font-size:16px">₹\${amount}</p>
+              <p style="margin:0 0 8px;color:#8a7a5f;font-size:13px">${serviceName}</p>
+              <p style="margin:0;color:#2b2b2b;font-weight:600;font-size:16px">${date} · ${timeSlot}</p>
+              <p style="margin:12px 0 0;color:#c79f49;font-weight:700;font-size:16px">₹${amount}</p>
             </div>
             <div style="margin-top:18px;display:flex;gap:12px;align-items:center">
               <a href="#" style="background:#c9a84c;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;font-weight:600">Manage Booking</a>
-              <span style="color:#9b9b9b;font-size:13px">Reference: <strong style="color:#2b2b2b">#\${Math.floor(Math.random()*900000+100000)}</strong></span>
+              <span style="color:#9b9b9b;font-size:13px">Reference: <strong style="color:#2b2b2b">#${Math.floor(Math.random()*900000+100000)}</strong></span>
             </div>
             <p style="margin-top:18px;color:#9b9b9b;font-size:12px">Need to reschedule or cancel? Reply to this email or call +91 98765 43210</p>
             <hr style="border:none;border-top:1px solid #f3ebe0;margin:18px 0">
             <p style="color:#9b9b9b;font-size:12px;margin:0">Lakmé Salon — Luxury hair & beauty services</p>
           </div>
-        \`;
+        `;
   
 
   try {
+    console.log('sendBookingConfirmation called:', { to: toEmail, name: toName, serviceName, date, timeSlot, amount, source: source || null });
+    
+    let sent = false;
+    let errors = [];
+
+    // 1. Try Brevo
     if (hasBrevo) {
-      await _sendWithBrevo({ from, to: toEmail, subject, html });
-      console.log('EMAIL SENT (Brevo) TO:', toEmail);
-    } else if (hasResend && resend) {
-      await _sendWithResend({ from, to: toEmail, subject, html });
-      console.log('EMAIL SENT (Resend) TO:', toEmail);
-    } else if (process.env.EMAIL_USER) {
-      await _sendWithSMTP({ from, to: toEmail, subject, html });
-      console.log('EMAIL SENT (SMTP) TO:', toEmail);
-    } else {
-      console.warn('No email provider configured (BREVO_API_KEY, RESEND_API_KEY or EMAIL_USER)');
+      try {
+        await _sendWithBrevo({ from, to: toEmail, subject, html });
+        console.log('EMAIL SENT (Brevo) TO:', toEmail);
+        sent = true;
+      } catch (brevoErr) {
+        console.error('Brevo send failed, trying fallbacks...', brevoErr.message);
+        errors.push(`Brevo: ${brevoErr.message}`);
+      }
+    }
+
+    // 2. Try Resend
+    if (!sent && hasResend && resend) {
+      try {
+        await _sendWithResend({ from, to: toEmail, subject, html });
+        console.log('EMAIL SENT (Resend) TO:', toEmail);
+        sent = true;
+      } catch (resendErr) {
+        console.error('Resend send failed, trying fallbacks...', resendErr.message);
+        errors.push(`Resend: ${resendErr.message}`);
+      }
+    }
+
+    // 3. Try SMTP
+    if (!sent && process.env.EMAIL_USER) {
+      try {
+        await _sendWithSMTP({ from, to: toEmail, subject, html });
+        console.log('EMAIL SENT (SMTP) TO:', toEmail);
+        sent = true;
+      } catch (smtpErr) {
+        console.error('SMTP send failed:', smtpErr.message);
+        errors.push(`SMTP: ${smtpErr.message}`);
+      }
+    }
+
+    if (!sent) {
+      if (errors.length > 0) {
+        console.warn(`No email provider succeeded. Attempted providers: ${errors.join(', ')}`);
+      } else {
+        console.warn('No email provider configured (BREVO_API_KEY, RESEND_API_KEY or EMAIL_USER)');
+      }
       return false;
     }
+
     console.log('✅ Booking email sent to:', toEmail);
     return true;
   } catch (err) {

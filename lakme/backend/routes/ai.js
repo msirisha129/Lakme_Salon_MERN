@@ -623,6 +623,14 @@ router.post('/quick-book', protect, moderatePrompt, async (req, res) => {
     try {
       const { sendBookingConfirmation } = require('../middleware/emailService');
       const userDoc = await User.findById(req.user._id);
+      const source = 'Website';
+      console.log("BOOKING EMAIL DEBUG", {
+        bookingId: booking?._id,
+        email: booking?.email,
+        name: booking?.name,
+        source,
+        requestBody: req.body
+      });
       const sent = await sendBookingConfirmation({
         toEmail: userDoc.email,
         toName: userDoc.name,
@@ -630,7 +638,8 @@ router.post('/quick-book', protect, moderatePrompt, async (req, res) => {
         date: new Date(date).toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'}),
         timeSlot,
         amount: service.price.toLocaleString(),
-        loyaltyPoints: Math.floor(service.price / 10)
+        loyaltyPoints: Math.floor(service.price / 10),
+        source
       });
       if (!sent) console.warn('Quick-book confirmation email not sent for user', req.user._id);
     } catch (e) {
@@ -773,6 +782,14 @@ router.post('/voice-book', protect, moderatePrompt, async (req, res) => {
 
     const { sendBookingConfirmation } = require('../middleware/emailService');
     const userDoc = await User.findById(req.user._id);
+    const source = 'Voice Assistant';
+    console.log("BOOKING EMAIL DEBUG", {
+      bookingId: booking?._id,
+      email: booking?.email,
+      name: booking?.name,
+      source,
+      requestBody: req.body
+    });
 
     const emailSent = await sendBookingConfirmation({
       toEmail: userDoc.email,
@@ -786,7 +803,7 @@ router.post('/voice-book', protect, moderatePrompt, async (req, res) => {
       timeSlot: matchedSlot,
       amount: service.price.toLocaleString(),
       loyaltyPoints: Math.floor(service.price / 10),
-      source: 'Voice Assistant'
+      source
     });
     if (!emailSent) console.warn('Booking confirmation email was not sent (voice-book) for user', req.user ? req.user._id : null);
     // Log if email provider not configured or sending failed
@@ -872,6 +889,14 @@ router.post('/voice-book/dev', moderatePrompt, async (req, res) => {
     });
 
     const { sendBookingConfirmation } = require('../middleware/emailService');
+    const source = 'Voice Assistant';
+    console.log("BOOKING EMAIL DEBUG", {
+      bookingId: booking?._id,
+      email: booking?.email,
+      name: booking?.name,
+      source,
+      requestBody: req.body
+    });
     const emailSent = await sendBookingConfirmation({
       toEmail,
       toName: toName || 'Valued Customer',
@@ -879,7 +904,8 @@ router.post('/voice-book/dev', moderatePrompt, async (req, res) => {
       date: bookingDate.toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'}),
       timeSlot: booking.timeSlot,
       amount: service.price.toLocaleString(),
-      loyaltyPoints: Math.floor(service.price/10)
+      loyaltyPoints: Math.floor(service.price/10),
+      source
     });
 
     if (!emailSent) console.warn('Dev booking confirmation email not sent to', toEmail);
@@ -964,6 +990,14 @@ router.post('/voice-book/guest', guestRateLimiter, moderatePrompt, async (req, r
     }
 
     const { sendBookingConfirmation } = require('../middleware/emailService');
+    const source = 'Voice Assistant';
+    console.log("BOOKING EMAIL DEBUG", {
+      bookingId: booking?._id,
+      email: booking?.email,
+      name: booking?.name,
+      source,
+      requestBody: req.body
+    });
     const emailSent = await sendBookingConfirmation({
       toEmail,
       toName: toName || 'Valued Customer',
@@ -972,7 +1006,7 @@ router.post('/voice-book/guest', guestRateLimiter, moderatePrompt, async (req, r
       timeSlot: matchedSlot,
       amount: service.price.toLocaleString(),
       loyaltyPoints: 0,
-      source: 'Voice Assistant'
+      source
     });
 
     if (!emailSent) console.warn('Guest booking confirmation email not sent to', toEmail);
@@ -1061,6 +1095,14 @@ router.post('/chat-book', protect, moderatePrompt, async (req, res) => {
 
     const { sendBookingConfirmation } = require('../middleware/emailService');
     const userDoc = await User.findById(req.user._id);
+    const source = 'Chat Assistant';
+    console.log("BOOKING EMAIL DEBUG", {
+      bookingId: booking?._id,
+      email: booking?.email,
+      name: booking?.name,
+      source,
+      requestBody: req.body
+    });
     
     const emailSent = await sendBookingConfirmation({
       toEmail: userDoc.email,
@@ -1070,7 +1112,7 @@ router.post('/chat-book', protect, moderatePrompt, async (req, res) => {
       timeSlot: matchedSlot,
       amount: service.price.toLocaleString(),
       loyaltyPoints: Math.floor(service.price / 10),
-      source: 'Chat Assistant'
+      source
     });
     if (!emailSent) console.warn('Booking confirmation email was not sent (chat-book) for user', req.user ? req.user._id : null);
 
