@@ -785,7 +785,8 @@ router.post('/voice-book', protect, moderatePrompt, async (req, res) => {
       }),
       timeSlot: matchedSlot,
       amount: service.price.toLocaleString(),
-      loyaltyPoints: Math.floor(service.price / 10)
+      loyaltyPoints: Math.floor(service.price / 10),
+      source: 'Voice Assistant'
     });
     if (!emailSent) console.warn('Booking confirmation email was not sent (voice-book) for user', req.user ? req.user._id : null);
     // Log if email provider not configured or sending failed
@@ -970,7 +971,8 @@ router.post('/voice-book/guest', guestRateLimiter, moderatePrompt, async (req, r
       date: bookingDate.toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'}),
       timeSlot: matchedSlot,
       amount: service.price.toLocaleString(),
-      loyaltyPoints: 0
+      loyaltyPoints: 0,
+      source: 'Voice Assistant'
     });
 
     if (!emailSent) console.warn('Guest booking confirmation email not sent to', toEmail);
@@ -1067,7 +1069,8 @@ router.post('/chat-book', protect, moderatePrompt, async (req, res) => {
       date: bookingDate.toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'}),
       timeSlot: matchedSlot,
       amount: service.price.toLocaleString(),
-      loyaltyPoints: Math.floor(service.price / 10)
+      loyaltyPoints: Math.floor(service.price / 10),
+      source: 'Chat Assistant'
     });
     if (!emailSent) console.warn('Booking confirmation email was not sent (chat-book) for user', req.user ? req.user._id : null);
 

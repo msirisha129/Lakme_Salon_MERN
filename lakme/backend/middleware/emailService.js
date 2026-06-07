@@ -56,33 +56,34 @@ async function _sendWithSMTP({ from, to, subject, html }) {
   return await transporter.sendMail({ from, to, subject, html });
 }
 
-async function sendBookingConfirmation({ toEmail, toName, serviceName, date, timeSlot, amount, loyaltyPoints }) {
-  const from = process.env.EMAIL_FROM || 'Lakmé Salon <no-reply@lakme.example.com>';
-  const subject = '✅ Booking Confirmed — Lakmé Salon';
-  const html = `
-    <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width:680px; margin:auto; padding:28px; background: #ffffff; border:1px solid #f1e9de; border-radius:12px;">
-      <div style="display:flex;align-items:center;gap:16px;margin-bottom:8px">
-        <div style="width:56px;height:56px;border-radius:8px;background:linear-gradient(135deg,#f6e7c9,#f0d9b0);display:flex;align-items:center;justify-content:center;font-weight:700;color:#7a5a2a">LK</div>
-        <div>
-          <h1 style="margin:0;font-size:20px;color:#2b2b2b;letter-spacing:0.2px">Booking Confirmed</h1>
-          <p style="margin:2px 0 0;color:#8a8a8a;font-size:13px">Thank you, ${toName} — we look forward to pampering you.</p>
-          <div style="margin-top:6px;display:inline-block;background:linear-gradient(90deg,#f8f2e6,#fff7ec);color:#7a5a2a;padding:6px 10px;border-radius:20px;font-size:12px;font-weight:700;letter-spacing:0.3px">Confirmed via Voice Assistant</div>
-        </div>
-      </div>
-      <div style="border-radius:10px;padding:18px;border:1px solid #fbf1e6;background:#fffdfa">
-        <p style="margin:0 0 8px;color:#8a7a5f;font-size:13px">${serviceName}</p>
-        <p style="margin:0;color:#2b2b2b;font-weight:600;font-size:16px">${date} · ${timeSlot}</p>
-        <p style="margin:12px 0 0;color:#c79f49;font-weight:700;font-size:16px">₹${amount}</p>
-      </div>
-      <div style="margin-top:18px;display:flex;gap:12px;align-items:center">
-        <a href="#" style="background:#c9a84c;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;font-weight:600">Manage Booking</a>
-        <span style="color:#9b9b9b;font-size:13px">Reference: <strong style="color:#2b2b2b">#${Math.floor(Math.random()*900000+100000)}</strong></span>
-      </div>
-      <p style="margin-top:18px;color:#9b9b9b;font-size:12px">Need to reschedule or cancel? Reply to this email or call +91 98765 43210</p>
-      <hr style="border:none;border-top:1px solid #f3ebe0;margin:18px 0">
-      <p style="color:#9b9b9b;font-size:12px;margin:0">Lakmé Salon — Luxury hair & beauty services</p>
-    </div>
-  `;
+async function sendBookingConfirmation({ toEmail, toName, serviceName, date, timeSlot, amount, loyaltyPoints, source }) {
+        const from = process.env.EMAIL_FROM || 'Lakmé Salon <no-reply@lakme.example.com>';
+        const subject = '✅ Booking Confirmed — Lakmé Salon';
+        const html = \`
+          <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width:680px; margin:auto; padding:28px; background: #ffffff; border:1px solid #f1e9de; border-radius:12px;">
+            <div style="display:flex;align-items:center;gap:16px;margin-bottom:8px">
+              <div style="width:56px;height:56px;border-radius:8px;background:linear-gradient(135deg,#f6e7c9,#f0d9b0);display:flex;align-items:center;justify-content:center;font-weight:700;color:#7a5a2a">LK</div>
+              <div>
+                <h1 style="margin:0;font-size:20px;color:#2b2b2b;letter-spacing:0.2px">Booking Confirmed</h1>
+                <p style="margin:2px 0 0;color:#8a8a8a;font-size:13px">Thank you, ${toName} — we look forward to pampering you.</p>
+                ${source ? \`<div style="margin-top:6px;display:inline-block;background:linear-gradient(90deg,#f8f2e6,#fff7ec);color:#7a5a2a;padding:6px 10px;border-radius:20px;font-size:12px;font-weight:700;letter-spacing:0.3px">Confirmed via \${source}</div>\` : ''}
+              </div>
+            </div>
+            <div style="border-radius:10px;padding:18px;border:1px solid #fbf1e6;background:#fffdfa">
+              <p style="margin:0 0 8px;color:#8a7a5f;font-size:13px">\${serviceName}</p>
+              <p style="margin:0;color:#2b2b2b;font-weight:600;font-size:16px">\${date} · \${timeSlot}</p>
+              <p style="margin:12px 0 0;color:#c79f49;font-weight:700;font-size:16px">₹\${amount}</p>
+            </div>
+            <div style="margin-top:18px;display:flex;gap:12px;align-items:center">
+              <a href="#" style="background:#c9a84c;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;font-weight:600">Manage Booking</a>
+              <span style="color:#9b9b9b;font-size:13px">Reference: <strong style="color:#2b2b2b">#\${Math.floor(Math.random()*900000+100000)}</strong></span>
+            </div>
+            <p style="margin-top:18px;color:#9b9b9b;font-size:12px">Need to reschedule or cancel? Reply to this email or call +91 98765 43210</p>
+            <hr style="border:none;border-top:1px solid #f3ebe0;margin:18px 0">
+            <p style="color:#9b9b9b;font-size:12px;margin:0">Lakmé Salon — Luxury hair & beauty services</p>
+          </div>
+        \`;
+  
 
   try {
     if (hasBrevo) {
