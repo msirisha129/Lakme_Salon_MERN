@@ -3,7 +3,6 @@ const router = express.Router();
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const { protect } = require('../middleware/auth');
-
 const logger = require('../utils/logger');
 
 const signToken = (id) => jwt.sign({ id }, process.env.JWT_SECRET || 'lakme_secret', {
@@ -40,11 +39,15 @@ router.post('/login', async (req, res) => {
   try {
     const user = await User.findOne({ email });
     if (!user || !(await user.matchPassword(password))) {
-      await logger.warn('user', `Invalid login attempt: ${email}`, { email });
+      await logger.warn('security', `Failed login attempt for email: ${email}`, { email, ip: req.ip });
       return res.status(401).json({ success: false, message: 'Invalid credentials' });
     }
     const token = signToken(user._id);
+    if (user.role === 'admin') {
+      await logger.info('app', `Admin logged in: ${user.email}`, { userId: user._id });
+    }
     await logger.info('user', `User logged in successfully: ${user.name} (${user.email})`, { userId: user._id, email: user.email });
+    await logger.info('security', `Successful login for user: ${user.email}`, { userId: user._id, ip: req.ip });
     res.json({ success: true, token, user: { id: user._id, name: user.name, email: user.email, role: user.role, loyaltyPoints: user.loyaltyPoints } });
   } catch (err) {
     await logger.error('error', `User login failed: ${err.message}`, { email, error: err.message });

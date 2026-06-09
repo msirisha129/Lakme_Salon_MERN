@@ -1,35 +1,26 @@
 const Log = require('../models/Log');
 
 const logger = {
-  log: async (category, level, message, details = '') => {
+  info: async (category, message, details = {}) => {
     try {
-      const detailsStr = typeof details === 'object' ? JSON.stringify(details) : String(details);
-      
-      // Print to terminal console
-      console.log(`[${category.toUpperCase()}][${level.toUpperCase()}] ${message}`, details ? detailsStr : '');
-      
-      // Save to MongoDB Log collection
-      await Log.create({
-        category,
-        level,
-        message,
-        details: detailsStr
-      });
+      await Log.create({ category, level: 'info', message, details: JSON.stringify(details) });
     } catch (err) {
-      console.error('Logger failed to save log to DB:', err.message);
+      console.error('Failed to log info event:', err);
     }
   },
-  
-  info: async (category, message, details = '') => {
-    await logger.log(category, 'info', message, details);
+  warn: async (category, message, details = {}) => {
+    try {
+      await Log.create({ category, level: 'warn', message, details: JSON.stringify(details) });
+    } catch (err) {
+      console.error('Failed to log warn event:', err);
+    }
   },
-  
-  warn: async (category, message, details = '') => {
-    await logger.log(category, 'warn', message, details);
-  },
-  
-  error: async (category, message, details = '') => {
-    await logger.log(category, 'error', message, details);
+  error: async (category, message, details = {}) => {
+    try {
+      await Log.create({ category, level: 'error', message, details: JSON.stringify(details) });
+    } catch (err) {
+      console.error('Failed to log error event:', err);
+    }
   }
 };
 

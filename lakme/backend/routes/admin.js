@@ -4,6 +4,7 @@ const Booking = require('../models/Booking');
 const User = require('../models/User');
 const Service = require('../models/Service');
 const { protect, adminOnly } = require('../middleware/auth');
+const Log = require('../models/Log'); // Import Log model
 const { sendBookingConfirmation } = require('../middleware/emailService');
 const startReminderJob = require('../middleware/reminderJob');
 
@@ -85,6 +86,9 @@ router.get('/logs', protect, adminOnly, async (req, res) => {
     } else if (type === 'error') {
       // Error logs = all error-level entries across all categories
       query = { level: 'error' };
+    } else if (type === 'security') {
+      // Security logs = all security-related entries
+      query = { category: 'security' };
     } else if (type) {
       query = { category: type };
     }
@@ -171,4 +175,3 @@ router.post('/test-email/dev', async (req, res) => {
 });
 
 module.exports = router;
-

@@ -79,11 +79,15 @@ export default function Admin() {
       const normalized = raw.map(item => {
         // If it's a Log model entry (has timestamp & message)
         if (item.timestamp || item.message) {
+          let details = item.details || '';
+          if (details === '{}' || details.trim() === '') {
+            details = ''; // Replace empty JSON object string or empty string with an empty string for cleaner display
+          }
           return {
             timestamp: item.timestamp || item.createdAt || Date.now(),
-            level: item.level || (item.level === undefined && item.role ? 'info' : 'info'),
-            message: item.message || (item.name ? `User: ${item.name}` : JSON.stringify(item)),
-            details: item.details || (item.email ? `${item.email} ${item.phone || ''}`.trim() : '')
+            level: item.level || 'info', // Default level to 'info' if missing
+            message: item.message || 'No message provided', // Ensure message exists
+            details: details
           };
         }
 
@@ -148,7 +152,13 @@ const downloadLogs = (type) => {
     logs.forEach(l => {
       csv += `"${new Date(l.timestamp).toLocaleString('en-IN')}","${l.level || ''}","${l.message || ''}","${l.details || ''}"\n`;
     });
-  } else if (type === 'error' || type === 'app') {
+  } else if (type === 'error' || type === 'app' || type === 'security') {
+    csv = 'Timestamp,Level,Message,Details\n';
+    logs.forEach(l => {
+      csv += `"${new Date(l.timestamp).toLocaleString('en-IN')}","${l.level || ''}","${l.message || ''}","${l.details || ''}"\n`;
+    });
+  }
+  else if (type === 'app') {
     csv = 'Timestamp,Level,Message,Details\n';
     logs.forEach(l => {
       csv += `"${new Date(l.timestamp).toLocaleString('en-IN')}","${l.level || ''}","${l.message || ''}","${l.details || ''}"\n`;
@@ -378,7 +388,7 @@ const downloadLogs = (type) => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28, flexWrap: 'wrap', gap: 12 }}>
               <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.4rem' }}>System Logs</h3>
               <button
-                onClick={() => downloadLogs(logTab)}
+                onClick={() => downloadLogs(logTab, logs)}
                 style={{ background: 'linear-gradient(135deg, var(--gold), var(--gold-dark))', color: 'white', border: 'none', borderRadius: 8, padding: '10px 20px', fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
               >
                 ⬇ Download CSV
@@ -395,6 +405,7 @@ const downloadLogs = (type) => {
                   { key: 'user',    label: '👤 User Logs',    color: '#8B5CF6' },
                   { key: 'error',   label: '🔴 Error Logs',   color: '#C8003B' },
                   { key: 'app',     label: '⚙️ App Logs',     color: '#6B7280' },
+                  { key: 'security',label: '🔒 Security Logs', color: '#FFD700' },
                 ].map(lt => (
                   <button
                     key={lt.key}

@@ -122,6 +122,9 @@ Act like a smart salon receptionist who remembers everything, guides customers n
 // ROUTES
 // ═══════════════════════════════════════════════════════════
 
+// Log AI service router initialization
+logger.info('app', 'AI Service Router initialized.');
+
 // Rate limiter for guest booking: prefer Redis-backed (multi-instance safe), else fallback to in-memory
 let redisClient = null;
 let rateLimiterRedis = null;
@@ -234,6 +237,8 @@ router.post('/chat', moderatePrompt, async (req, res) => {
       }
     ];
 
+    logger.info('app', 'AI Chat API call received.', { userMessage: message.substring(0, 100), conversationLength: conversationHistory.length });
+
     // Call Groq API
     const completion = await groq.chat.completions.create({
       messages, 
@@ -286,6 +291,8 @@ router.post('/chat', moderatePrompt, async (req, res) => {
 
 // Image analysis endpoint for hairstyle suggestions
 router.post('/analyze-image', upload.single('image'), async (req, res) => {
+  logger.info('app', 'Image Analysis API call received.', { preferences: req.body.preferences, concerns: req.body.concerns });
+
   try {
     console.log("=== IMAGE DEBUG ===");
     console.log("FILE:", req.file);
