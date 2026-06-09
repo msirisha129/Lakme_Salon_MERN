@@ -29,6 +29,7 @@ export default function Chatbot({ externalOpen, onExternalOpenHandled }) {
   // null | 'askService' | 'askDate' | 'askTime' | 'confirm'
   const [bookingData, setBookingData] = useState({});
 
+  const [alternativeSlots, setAlternativeSlots] = useState([]);
   // FIX 1: bookingDataRef must be declared at the top level, not inside any function
   const bookingDataRef = useRef(bookingData);
   useEffect(() => { bookingDataRef.current = bookingData; }, [bookingData]);
@@ -166,16 +167,58 @@ export default function Chatbot({ externalOpen, onExternalOpenHandled }) {
             setMessages(m => [...m, { from: 'bot', text: errMsg }]);
           }
           setLoading(false);
-          return;
-
+          return; // Ensure we return after handling the error
         } else {
           // User said no
           setBookingState(null);
           setBookingData({});
+          setAlternativeSlots([]); // Clear alternatives if booking is cancelled
           await new Promise(r => setTimeout(r, 600));
           setTyping(false);
           setMessages(m => [...m, { from: 'bot', text: "No problem! Booking cancelled. Is there anything else I can help you with? 💄" }]);
           setLoading(false);
+          return;
+        }
+      }
+
+      // Handle user selection of an alternative time slot
+      if (bookingState === 'chooseAlternative') {
+        const selectedTime = alternativeSlots.find(slot => msg.toLowerCase().includes(slot.toLowerCase().replace(/am|pm/g, '').trim()));
+        if (selectedTime) {
+          const newData = { ...bookingData, time: selectedTime };
+          setBookingData(newData);
+          bookingDataRef.current = newData; // Sync ref immediately
+          setAlternativeSlots([]); // Clear alternatives
+          setBookingState('confirm'); // Move to confirm state with new time
+          await new Promise(r => setTimeout(r, 600));
+          setTyping(false);
+          const botMsg = {
+            from: 'bot',
+            text: `Okay, you selected ${selectedTime}. Here's your updated booking summary:\n\n💇‍♀️ **Service:** ${newData.service}\n📅 **Date:** ${newData.date}\n⏰ **Time:** ${selectedTime}\n\nShall I confirm this booking? Reply **"yes"** to confirm or **"no"** to cancel.`,
+            bookingSummary: newData
+          };
+          setMessages(m => [...m, botMsg]);
+          setLoading(false);
+          return;
+        } else if (/no|cancel/i.test(msg)) {
+          // User explicitly rejected alternatives
+          setBookingState(null);
+          setBookingData({});
+          setAlternativeSlots([]);
+          await new Promise(r => setTimeout(r, 600));
+          setTyping(false);
+          setMessages(m => [...m, { from: 'bot', text: "No problem! Booking cancelled. Is there anything else I can help you with? 💄" }]);
+          setLoading(false);
+          return;
+        } else {
+          // User input didn't match an alternative or "no"
+          const botMsg = {
+            from: 'bot',
+            text: `I didn't understand your selection. Please choose one of the suggested times: ${alternativeSlots.join(', ')}, or say "no" to cancel.`,
+          };
+          setMessages(m => [...m, botMsg]);
+          setLoading(false);
+          setTyping(false);
           return;
         }
       }
