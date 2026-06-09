@@ -751,18 +751,27 @@ router.post('/voice-book', protect, moderatePrompt, async (req, res) => {
     
     bookingDate.setHours(12, 0, 0, 0);
 
-    // Validate not in past
-    if (isPastDate(bookingDate)) return res.status(400).json({ success: false, message: 'Cannot book a past date. Please choose a future date.' });
-
     const TIME_SLOTS = ['09:00 AM','09:30 AM','10:00 AM','10:30 AM','11:00 AM','11:30 AM',
       '12:00 PM','12:30 PM','01:00 PM','02:00 PM','02:30 PM','03:00 PM',
       '03:30 PM','04:00 PM','04:30 PM','05:00 PM','05:30 PM','06:00 PM','06:30 PM','07:00 PM'];
     
-    const matchedSlot = TIME_SLOTS.find(s =>
-      s.toLowerCase().replace(/\s/g,'').includes(
-        (timeSlot || '').toLowerCase().replace(/\s/g,'').substring(0,4)
+    // Validate not in past
+    if (isPastDate(bookingDate)) return res.status(400).json({ success: false, message: 'Cannot book a past date. Please choose a future date.' });
+
+    // Strict matching for timeSlot
+    const matchedSlot = TIME_SLOTS.find(s => 
+      s.toLowerCase().replace(/\s/g,'') === (timeSlot || '').toLowerCase().replace(/\s/g,'')
+    );
+
+    if (!matchedSlot) {
+      // If no exact match, try fuzzy matching to suggest alternatives
+      const fuzzyMatched = TIME_SLOTS.filter(s =>
+        s.toLowerCase().replace(/\s/g,'').includes((timeSlot || '').toLowerCase().replace(/\s/g,'').substring(0,4)) ||
+        (timeSlot || '').toLowerCase().replace(/\s/g,'').includes(s.toLowerCase().replace(/\s/g,'').substring(0,4))
       )
-    ) || timeSlot;
+      const suggestions = fuzzyMatched.length > 0 ? fuzzyMatched.slice(0, 3) : TIME_SLOTS.slice(0, 3); // Fallback to popular slots if no fuzzy match
+      return res.status(400).json({ success: false, message: `Sorry, "${timeSlot}" is not a valid time slot. Please choose from available slots like: ${suggestions.join(', ')}.`, alternatives: suggestions });
+    }
 
     // Prevent double bookings for same date+slot (Moved after matchedSlot definition)
     const existing = await Booking.findOne({ date: bookingDate, timeSlot: matchedSlot, status: { $ne: 'cancelled' } });
