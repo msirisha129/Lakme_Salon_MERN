@@ -1,6 +1,7 @@
 const { Resend } = require('resend');
 const nodemailer = require('nodemailer');
 const fetch = require('node-fetch');
+const logger = require('../utils/logger');
 
 const hasResend = !!process.env.RESEND_API_KEY;
 let resend;
@@ -138,17 +139,24 @@ async function sendBookingConfirmation({ toEmail, toName, serviceName, date, tim
 
     if (!sent) {
       if (errors.length > 0) {
-        console.warn(`No email provider succeeded. Attempted providers: ${errors.join(', ')}`);
+        const errMsg = `No email provider succeeded. Attempted providers: ${errors.join(', ')}`;
+        console.warn(errMsg);
+        await logger.warn('email', errMsg, { toEmail, serviceName });
       } else {
-        console.warn('No email provider configured (BREVO_API_KEY, RESEND_API_KEY or EMAIL_USER)');
+        const noProviderMsg = 'No email provider configured (BREVO_API_KEY, RESEND_API_KEY or EMAIL_USER)';
+        console.warn(noProviderMsg);
+        await logger.warn('email', noProviderMsg, { toEmail, serviceName });
       }
       return false;
     }
 
     console.log('✅ Booking email sent to:', toEmail);
+    await logger.info('email', `Booking confirmation sent to ${toEmail}`, { toEmail, toName, serviceName, date, timeSlot, amount, source: source || null });
     return true;
   } catch (err) {
-    console.error('❌ Booking email failed:', err && err.message ? err.message : err);
+    const msg = err && err.message ? err.message : String(err);
+    console.error('❌ Booking email failed:', msg);
+    await logger.error('email', `Booking email failed: ${msg}`, { toEmail, serviceName });
     return false;
   }
 }
@@ -181,13 +189,18 @@ async function sendReminderEmail({ toEmail, toName, serviceName, timeSlot }) {
     } else if (process.env.EMAIL_USER) {
       await _sendWithSMTP({ from, to: toEmail, subject, html });
     } else {
-      console.warn('No email provider configured (BREVO_API_KEY, RESEND_API_KEY or EMAIL_USER)');
+      const noProviderMsg = 'No email provider configured (BREVO_API_KEY, RESEND_API_KEY or EMAIL_USER)';
+      console.warn(noProviderMsg);
+      await logger.warn('email', noProviderMsg, { toEmail, type: 'reminder' });
       return false;
     }
     console.log('✅ Reminder email sent to:', toEmail);
+    await logger.info('email', `Reminder email sent to ${toEmail}`, { toEmail, toName, serviceName, timeSlot });
     return true;
   } catch (err) {
-    console.error('❌ Reminder email failed:', err && err.message ? err.message : err);
+    const msg = err && err.message ? err.message : String(err);
+    console.error('❌ Reminder email failed:', msg);
+    await logger.error('email', `Reminder email failed: ${msg}`, { toEmail });
     return false;
   }
 }

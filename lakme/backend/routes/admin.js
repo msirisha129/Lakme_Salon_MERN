@@ -55,49 +55,50 @@ router.get('/stats', protect, adminOnly, async (req, res) => {
 router.get('/logs', protect, adminOnly, async (req, res) => {
   try {
     const { type } = req.query;
-    
+
+    // Booking logs → return actual Booking documents (with service + user populated)
     if (type === 'booking') {
-      const logs = await Booking.find()
+      const data = await Booking.find()
         .populate('user', 'name email phone')
         .populate('service', 'name price category')
         .sort({ createdAt: -1 })
         .limit(500);
-      return res.json({ success: true, data: logs });
+      return res.json({ success: true, data });
     }
 
+    // User logs → return actual User documents
     if (type === 'user') {
-      const User = require('../models/User');
-      const logs = await User.find()
+      const data = await User.find({ role: { $in: ['user', 'admin'] } })
         .select('name email phone role loyaltyPoints createdAt')
         .sort({ createdAt: -1 })
         .limit(500);
-      return res.json({ success: true, data: logs });
+      return res.json({ success: true, data });
     }
 
-    if (type === 'error' || type === 'app') {
-      // Read from log file
-      const fs = require('fs');
-      const path = require('path');
-      const logFile = path.join(__dirname, '../logs', `${type}.log`);
-      
-      if (!fs.existsSync(logFile)) {
-        return res.json({ success: true, data: [] });
-      }
+    // Email / Voice / Error / App → query the Log model
+    const Log = require('../models/Log');
+    let query = {};
 
-      const content = fs.readFileSync(logFile, 'utf8');
-      const lines = content.trim().split('\n').filter(Boolean).reverse().slice(0, 200);
-      const parsed = lines.map(line => {
-        try { return JSON.parse(line); }
-        catch { return { timestamp: new Date(), level: type, message: line, details: '' }; }
-      });
-      return res.json({ success: true, data: parsed });
+    if (type === 'app') {
+      // App logs = info + warn from any non-core category
+      query = { level: { $in: ['info', 'warn'] }, category: { $nin: ['email', 'voice', 'user'] } };
+    } else if (type === 'error') {
+      // Error logs = all error-level entries across all categories
+      query = { level: 'error' };
+    } else if (type) {
+      query = { category: type };
     }
 
-    res.json({ success: true, data: [] });
+    const data = await Log.find(query)
+      .sort({ timestamp: -1 })
+      .limit(500);
+
+    res.json({ success: true, data });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 });
+
 
 // Dev: Send a test booking confirmation email (protected)
 router.post('/test-email', protect, async (req, res) => {

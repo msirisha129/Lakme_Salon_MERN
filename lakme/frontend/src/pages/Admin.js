@@ -74,7 +74,49 @@ export default function Admin() {
   setLogsLoading(true);
   try {
     const { data } = await API.get(`/admin/logs?type=${type}`);
-    setLogs(data.data || []);
+      const raw = data.data || [];
+      // Normalize different backend responses to a common log shape
+      const normalized = raw.map(item => {
+        // If it's a Log model entry (has timestamp & message)
+        if (item.timestamp || item.message) {
+          return {
+            timestamp: item.timestamp || item.createdAt || Date.now(),
+            level: item.level || (item.level === undefined && item.role ? 'info' : 'info'),
+            message: item.message || (item.name ? `User: ${item.name}` : JSON.stringify(item)),
+            details: item.details || (item.email ? `${item.email} ${item.phone || ''}`.trim() : '')
+          };
+        }
+
+        // Booking documents
+        if (item.service || item.user || item.totalAmount !== undefined) {
+          return {
+            timestamp: item.createdAt || item.date || Date.now(),
+            level: 'info',
+            message: `${item.user?.name || 'Unknown'} booked ${item.service?.name || 'service'}`,
+            details: `Amount: ${item.totalAmount || item.service?.price || ''} | ${item.service?.category || ''}`
+          };
+        }
+
+        // User documents
+        if (item.email && item.role) {
+          return {
+            timestamp: item.createdAt || Date.now(),
+            level: 'info',
+            message: `${item.name} (${item.email})`,
+            details: `Role: ${item.role} ${item.phone ? `| ${item.phone}` : ''}`
+          };
+        }
+
+        // Fallback: stringify
+        return {
+          timestamp: item.createdAt || Date.now(),
+          level: item.level || 'info',
+          message: item.message || JSON.stringify(item),
+          details: item.details || ''
+        };
+      });
+
+      setLogs(normalized || []);
   } catch (err) {
     toast.error('Failed to load logs');
   } finally {
@@ -87,14 +129,24 @@ const downloadLogs = (type) => {
   
   let csv = '';
   if (type === 'booking') {
-    csv = 'Date,Customer,Email,Service,Amount,Status,Booked Via\n';
+    csv = 'Timestamp,Level,Message,Details\n';
     logs.forEach(l => {
-      csv += `"${new Date(l.createdAt).toLocaleDateString('en-IN')}","${l.user?.name || ''}","${l.user?.email || ''}","${l.service?.name || ''}","₹${l.totalAmount || 0}","${l.status || ''}","${l.bookedVia || 'website'}"\n`;
+      csv += `"${new Date(l.timestamp).toLocaleString('en-IN')}","${l.level || ''}","${l.message || ''}","${l.details || ''}"\n`;
+    });
+  } else if (type === 'email') {
+    csv = 'Timestamp,Level,Message,Details\n';
+    logs.forEach(l => {
+      csv += `"${new Date(l.timestamp).toLocaleString('en-IN')}","${l.level || ''}","${l.message || ''}","${l.details || ''}"\n`;
+    });
+  } else if (type === 'voice') {
+    csv = 'Timestamp,Level,Message,Details\n';
+    logs.forEach(l => {
+      csv += `"${new Date(l.timestamp).toLocaleString('en-IN')}","${l.level || ''}","${l.message || ''}","${l.details || ''}"\n`;
     });
   } else if (type === 'user') {
-    csv = 'Date,Name,Email,Phone,Role,Loyalty Points\n';
+    csv = 'Timestamp,Level,Message,Details\n';
     logs.forEach(l => {
-      csv += `"${new Date(l.createdAt).toLocaleDateString('en-IN')}","${l.name || ''}","${l.email || ''}","${l.phone || ''}","${l.role || ''}","${l.loyaltyPoints || 0}"\n`;
+      csv += `"${new Date(l.timestamp).toLocaleString('en-IN')}","${l.level || ''}","${l.message || ''}","${l.details || ''}"\n`;
     });
   } else if (type === 'error' || type === 'app') {
     csv = 'Timestamp,Level,Message,Details\n';
@@ -335,26 +387,30 @@ const downloadLogs = (type) => {
 
             {/* Log category tabs */}
             <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap' }}>
-              {[
-                { key: 'booking', label: '📊 Booking Logs', color: '#4A90D9' },
-                { key: 'user',    label: '👤 User Logs',    color: '#8B5CF6' },
-                { key: 'error',   label: '🔴 Error Logs',   color: '#C8003B' },
-                { key: 'app',     label: '⚙️ App Logs',     color: '#0F9B58' },
-              ].map(lt => (
-                <button
-                  key={lt.key}
-                  onClick={() => { setLogTab(lt.key); loadLogs(lt.key); }}
-                  style={{
-                    padding: '10px 20px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                    background: logTab === lt.key ? lt.color : 'white',
-                    color: logTab === lt.key ? 'white' : 'var(--text-secondary)',
-                    border: `1px solid ${logTab === lt.key ? lt.color : 'var(--border-light)'}`,
-                    transition: 'all 0.2s'
-                  }}
-                >
-                  {lt.label}
-                </button>
-              ))}
+              {
+                [
+                  { key: 'booking', label: '📊 Booking Logs', color: '#4A90D9' },
+                  { key: 'email',   label: '📧 Email Logs',   color: '#F5A623' },
+                  { key: 'voice',   label: '🎤 Voice Logs',   color: '#0F9B58' },
+                  { key: 'user',    label: '👤 User Logs',    color: '#8B5CF6' },
+                  { key: 'error',   label: '🔴 Error Logs',   color: '#C8003B' },
+                  { key: 'app',     label: '⚙️ App Logs',     color: '#6B7280' },
+                ].map(lt => (
+                  <button
+                    key={lt.key}
+                    onClick={() => { setLogTab(lt.key); loadLogs(lt.key); }}
+                    style={{
+                      padding: '10px 20px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                      background: logTab === lt.key ? lt.color : 'white',
+                      color: logTab === lt.key ? 'white' : 'var(--text-secondary)',
+                      border: `1px solid ${logTab === lt.key ? lt.color : 'var(--border-light)'}`,
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    {lt.label}
+                  </button>
+                ))
+              }
             </div>
 
             {/* Log content */}
@@ -369,50 +425,24 @@ const downloadLogs = (type) => {
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
                     <tr style={{ background: 'var(--cream)' }}>
-                      {logTab === 'booking' && ['Date', 'Customer', 'Email', 'Service', 'Amount', 'Status'].map(h => (
-                        <th key={h} style={{ padding: '14px 16px', fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--text-muted)', textAlign: 'left', fontWeight: 500 }}>{h}</th>
-                      ))}
-                      {logTab === 'user' && ['Date', 'Name', 'Email', 'Phone', 'Role', 'Points'].map(h => (
-                        <th key={h} style={{ padding: '14px 16px', fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--text-muted)', textAlign: 'left', fontWeight: 500 }}>{h}</th>
-                      ))}
-                      {(logTab === 'error' || logTab === 'app') && ['Time', 'Level', 'Message', 'Details'].map(h => (
+                      {['Time', 'Level', 'Message', 'Details'].map(h => (
                         <th key={h} style={{ padding: '14px 16px', fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--text-muted)', textAlign: 'left', fontWeight: 500 }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {logTab === 'booking' && logs.map((l, i) => (
+                    {logs.map((l, i) => (
                       <tr key={i} style={{ borderTop: '1px solid var(--border-light)' }}>
-                        <td style={{ padding: '12px 16px', fontSize: 12 }}>{new Date(l.createdAt).toLocaleDateString('en-IN')}</td>
-                        <td style={{ padding: '12px 16px', fontSize: 13, fontWeight: 500 }}>{l.user?.name}</td>
-                        <td style={{ padding: '12px 16px', fontSize: 12, color: 'var(--text-secondary)' }}>{l.user?.email}</td>
-                        <td style={{ padding: '12px 16px', fontSize: 13 }}>{l.service?.name}</td>
-                        <td style={{ padding: '12px 16px', fontFamily: 'var(--font-display)', color: 'var(--gold)' }}>₹{l.totalAmount?.toLocaleString()}</td>
+                        <td style={{ padding: '12px 16px', fontSize: 11, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{new Date(l.timestamp).toLocaleString('en-IN')}</td>
                         <td style={{ padding: '12px 16px' }}>
-                          <span style={{ background: `${S_COLORS[l.status]}15`, color: S_COLORS[l.status], fontSize: 10, padding: '4px 8px', borderRadius: 50, fontWeight: 600 }}>{l.status}</span>
-                        </td>
-                      </tr>
-                    ))}
-                    {logTab === 'user' && logs.map((l, i) => (
-                      <tr key={i} style={{ borderTop: '1px solid var(--border-light)' }}>
-                        <td style={{ padding: '12px 16px', fontSize: 12 }}>{new Date(l.createdAt).toLocaleDateString('en-IN')}</td>
-                        <td style={{ padding: '12px 16px', fontSize: 13, fontWeight: 500 }}>{l.name}</td>
-                        <td style={{ padding: '12px 16px', fontSize: 12, color: 'var(--text-secondary)' }}>{l.email}</td>
-                        <td style={{ padding: '12px 16px', fontSize: 12 }}>{l.phone}</td>
-                        <td style={{ padding: '12px 16px' }}>
-                          <span style={{ background: l.role === 'admin' ? 'rgba(201,168,76,0.1)' : 'rgba(74,144,217,0.1)', color: l.role === 'admin' ? 'var(--gold)' : '#4A90D9', fontSize: 10, padding: '4px 8px', borderRadius: 50, fontWeight: 600 }}>{l.role}</span>
-                        </td>
-                        <td style={{ padding: '12px 16px', fontSize: 13, color: '#8B5CF6', fontWeight: 600 }}>{l.loyaltyPoints || 0} pts</td>
-                      </tr>
-                    ))}
-                    {(logTab === 'error' || logTab === 'app') && logs.map((l, i) => (
-                      <tr key={i} style={{ borderTop: '1px solid var(--border-light)' }}>
-                        <td style={{ padding: '12px 16px', fontSize: 11, color: 'var(--text-secondary)' }}>{new Date(l.timestamp).toLocaleString('en-IN')}</td>
-                        <td style={{ padding: '12px 16px' }}>
-                          <span style={{ background: l.level === 'error' ? 'rgba(200,0,59,0.1)' : 'rgba(15,155,88,0.1)', color: l.level === 'error' ? '#C8003B' : '#0F9B58', fontSize: 10, padding: '4px 8px', borderRadius: 50, fontWeight: 600 }}>{l.level}</span>
+                          <span style={{
+                            background: l.level === 'error' ? 'rgba(200,0,59,0.1)' : l.level === 'warn' ? 'rgba(245,166,35,0.1)' : 'rgba(15,155,88,0.1)',
+                            color: l.level === 'error' ? '#C8003B' : l.level === 'warn' ? '#F5A623' : '#0F9B58',
+                            fontSize: 10, padding: '4px 8px', borderRadius: 50, fontWeight: 600
+                          }}>{l.level}</span>
                         </td>
                         <td style={{ padding: '12px 16px', fontSize: 13 }}>{l.message}</td>
-                        <td style={{ padding: '12px 16px', fontSize: 11, color: 'var(--text-muted)', maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.details}</td>
+                        <td style={{ padding: '12px 16px', fontSize: 11, color: 'var(--text-muted)', maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.details}</td>
                       </tr>
                     ))}
                   </tbody>

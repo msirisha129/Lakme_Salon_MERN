@@ -5,6 +5,7 @@ const Service = require('../models/Service');
 const User = require('../models/User');
 const { protect, adminOnly } = require('../middleware/auth');
 const { consumeUserLimit } = require('../middleware/bookingRateLimiter');
+const logger = require('../utils/logger');
 
 const TIME_SLOTS = ['09:00 AM','09:30 AM','10:00 AM','10:30 AM','11:00 AM','11:30 AM',
   '12:00 PM','12:30 PM','01:00 PM','02:00 PM','02:30 PM','03:00 PM',
@@ -95,13 +96,32 @@ try {
     loyaltyPoints: Math.floor(service.price / 10),
     source
   });
-  if (!sent) console.warn('Booking confirmation email not sent (bookings.create) for user', req.user ? req.user._id : null);
-} catch (e) { console.error('Booking email error:', e.message); }
-   
-   
+  if (!sent) {
+    console.warn('Booking confirmation email not sent (bookings.create) for user', req.user ? req.user._id : null);
+    await logger.warn('email', `Booking confirmation email failed for user ${req.user._id}`, { bookingId: booking._id, userEmail: userDoc.email });
+  } else {
+    await logger.info('email', `Booking confirmation email sent to ${userDoc.email}`, { bookingId: booking._id, service: service.name, source });
+  }
+} catch (e) {
+  console.error('Booking email error:', e.message);
+  await logger.error('email', `Booking email threw an error: ${e.message}`, { bookingId: booking?._id });
+}
+
+    // Log booking creation
+    await logger.info('booking', `New booking: ${service.name} by ${req.user.email || req.user._id}`, {
+      bookingId: booking._id,
+      userId: req.user._id,
+      service: service.name,
+      date: parsed,
+      timeSlot,
+      amount: service.price,
+      source: 'Website'
+    });
+
     const populated = await Booking.findById(booking._id).populate('service', 'name price duration category');
     res.status(201).json({ success: true, data: populated, message: 'Booking confirmed! You earned loyalty points.' });
   } catch (err) {
+    await logger.error('booking', `Booking creation failed: ${err.message}`, { userId: req.user?._id });
     res.status(400).json({ success: false, message: err.message });
   }
 });
@@ -125,8 +145,10 @@ router.put('/:id/cancel', protect, async (req, res) => {
     if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
     booking.status = 'cancelled';
     await booking.save();
+    await logger.info('booking', `Booking cancelled by user ${req.user._id}`, { bookingId: booking._id });
     res.json({ success: true, message: 'Booking cancelled' });
   } catch (err) {
+    await logger.error('booking', `Booking cancellation failed: ${err.message}`, { bookingId: req.params.id });
     res.status(500).json({ success: false, message: err.message });
   }
 });

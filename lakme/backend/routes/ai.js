@@ -12,6 +12,7 @@ const User = require('../models/User');
 const { protect } = require('../middleware/auth');
 const { consumeUserLimit, consumeEmailLimit } = require('../middleware/bookingRateLimiter');
 const { moderatePrompt } = require('../middleware/moderation');
+const logger = require('../utils/logger');
 
 // Configure multer for image uploads
 const storage = multer.memoryStorage();
@@ -641,10 +642,25 @@ router.post('/quick-book', protect, moderatePrompt, async (req, res) => {
         loyaltyPoints: Math.floor(service.price / 10),
         source
       });
-      if (!sent) console.warn('Quick-book confirmation email not sent for user', req.user._id);
+      if (!sent) {
+        console.warn('Quick-book confirmation email not sent for user', req.user._id);
+        await logger.warn('email', `Quick-book email failed for user ${req.user._id}`, { bookingId: booking._id });
+      } else {
+        await logger.info('email', `Quick-book email sent to ${userDoc.email}`, { bookingId: booking._id, service: service.name, source });
+      }
     } catch (e) {
       console.error('Quick-book email error:', e.message);
+      await logger.error('email', `Quick-book email error: ${e.message}`, { bookingId: booking?._id });
     }
+
+    await logger.info('booking', `Quick booking: ${service.name} by ${req.user.email || req.user._id}`, {
+      bookingId: booking._id,
+      userId: req.user._id,
+      service: service.name,
+      timeSlot,
+      amount: service.price,
+      source: 'Website'
+    });
 
     res.json({
       success: true,
@@ -654,6 +670,7 @@ router.post('/quick-book', protect, moderatePrompt, async (req, res) => {
 
   } catch (error) {
     console.error('Quick Book Error:', error);
+    await logger.error('booking', `Quick booking failed: ${error.message}`, { userId: req.user?._id });
     res.status(500).json({ 
       success: false, 
       message: 'Error creating booking. Please try again!',
@@ -805,12 +822,23 @@ router.post('/voice-book', protect, moderatePrompt, async (req, res) => {
       loyaltyPoints: Math.floor(service.price / 10),
       source
     });
-    if (!emailSent) console.warn('Booking confirmation email was not sent (voice-book) for user', req.user ? req.user._id : null);
-    // Log if email provider not configured or sending failed
-    try {
-      const { sendBookingConfirmation } = require('../middleware/emailService');
-      // no-op: we already called above; we rely on emailService logs for failures
-    } catch (e) { console.warn('Email check error:', e.message); }
+    if (!emailSent) {
+      console.warn('Booking confirmation email was not sent (voice-book) for user', req.user ? req.user._id : null);
+      await logger.warn('email', `Voice booking email failed for user ${req.user._id}`, { bookingId: booking._id, service: service.name });
+    } else {
+      await logger.info('email', `Voice booking email sent to ${userDoc.email}`, { bookingId: booking._id, service: service.name, source });
+    }
+
+    // Log voice booking
+    await logger.info('voice', `Voice booking: ${service.name} by ${req.user.email || req.user._id}`, {
+      bookingId: booking._id,
+      userId: req.user._id,
+      service: service.name,
+      date: bookingDate,
+      timeSlot: matchedSlot,
+      amount: service.price,
+      source: 'Voice Assistant'
+    });
 
     res.json({
       success: true,
@@ -824,6 +852,7 @@ router.post('/voice-book', protect, moderatePrompt, async (req, res) => {
       body: req.body,
       user: req.user ? req.user._id : null
     });
+    await logger.error('voice', `Voice booking failed: ${err.message}`, { userId: req.user?._id, body: req.body });
     res.status(500).json({ success: false, message: 'Internal server error', error: err.message });
   }
 });
@@ -1114,7 +1143,22 @@ router.post('/chat-book', protect, moderatePrompt, async (req, res) => {
       loyaltyPoints: Math.floor(service.price / 10),
       source
     });
-    if (!emailSent) console.warn('Booking confirmation email was not sent (chat-book) for user', req.user ? req.user._id : null);
+    if (!emailSent) {
+      console.warn('Booking confirmation email was not sent (chat-book) for user', req.user ? req.user._id : null);
+      await logger.warn('email', `Chat booking email failed for user ${req.user._id}`, { bookingId: booking._id, service: service.name });
+    } else {
+      await logger.info('email', `Chat booking email sent to ${userDoc.email}`, { bookingId: booking._id, service: service.name, source });
+    }
+
+    await logger.info('voice', `Chat booking: ${service.name} by ${req.user.email || req.user._id}`, {
+      bookingId: booking._id,
+      userId: req.user._id,
+      service: service.name,
+      date: bookingDate,
+      timeSlot: matchedSlot,
+      amount: service.price,
+      source: 'Chat Assistant'
+    });
 
     res.json({
       success: true,
@@ -1123,6 +1167,7 @@ router.post('/chat-book', protect, moderatePrompt, async (req, res) => {
 
   } catch (err) {
     console.error('Chat book error:', err.message);
+    await logger.error('voice', `Chat booking failed: ${err.message}`, { userId: req.user?._id });
     res.status(500).json({ success: false, message: err.message });
   }
 });
