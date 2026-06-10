@@ -9,6 +9,10 @@ const userSchema = new mongoose.Schema({
   role: { type: String, enum: ['user', 'admin'], default: 'user' },
   avatar: { type: String, default: '' },
   loyaltyPoints: { type: Number, default: 0 },
+  otp: { type: String }, // Hashed OTP
+  otpExpires: { type: Date },
+  otpAttempts: { type: Number, default: 0 },
+  otpLastGenerated: { type: Date },
   bookingHistory: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Booking' }],
   createdAt: { type: Date, default: Date.now }
 });

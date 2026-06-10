@@ -1,8 +1,9 @@
 // Use axios' browser build to avoid webpack/node core polyfill issues
 // Lightweight fetch-based API wrapper to avoid bundling node-only modules (axios pulls node adapters)
 const defaultHost = window.location.hostname;
-const BASE = 'https://lakme-backend-4y1r.onrender.com/api';
-
+const BASE =
+  process.env.REACT_APP_API_URL ||
+  'http://localhost:5000/api';
 function authHeaders() {
   const token = localStorage.getItem('lakme_token');
   return token ? { Authorization: `Bearer ${token}` } : {};

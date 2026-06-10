@@ -11,8 +11,10 @@ import Hairstyle from './pages/Hairstyle';
 import Contact from './pages/Contact';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import OtpVerification from './pages/OtpVerification';
 import Dashboard from './pages/Dashboard';
 import Admin from './pages/Admin';
+
 
 const ProtectedRoute = ({ children }) => {
   const { user } = useAuth();
@@ -37,6 +39,7 @@ function AppContent() {
         <Route path="/contact" element={<Contact />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/otp-verification" element={<OtpVerification />} />
         <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
         <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
         <Route path="*" element={<Navigate to="/" />} />

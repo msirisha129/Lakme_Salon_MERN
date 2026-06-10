@@ -12,11 +12,52 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(false);
 
   const login = async (email, password) => {
-    const payload = { email: (email || '').trim().toLowerCase(), password };
-    const { data } = await API.post('/auth/login', payload);
-    localStorage.setItem('lakme_token', data.token);
-    localStorage.setItem('lakme_user', JSON.stringify(data.user));
-    setUser(data.user);
+    setLoading(true);
+    try {
+      const payload = { email: (email || '').trim().toLowerCase(), password };
+      console.log('AuthContext: Sending login request to backend with payload:', payload);
+      const { data } = await API.post('/auth/login', payload);
+
+      // If 2FA is required, do NOT set the user state or token yet
+      if (data.requires2FA) {
+        localStorage.setItem('lakme_2fa_email', payload.email);
+        return data;
+      }
+
+      // Normal login path (if 2FA was disabled or not triggered)
+      console.log('AuthContext: Backend response (no 2FA required):', data);
+      localStorage.setItem('lakme_token', data.token);
+      localStorage.setItem('lakme_user', JSON.stringify(data.user));
+      setUser(data.user);
+      console.log('AuthContext: localStorage after login (no 2FA):');
+      console.log('  lakme_token:', localStorage.getItem('lakme_token'));
+      console.log('  lakme_user:', localStorage.getItem('lakme_user'));
+      console.log('  lakme_2fa_email:', localStorage.getItem('lakme_2fa_email'));
+
+      return data;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const verifyOtp = async (email, otp) => {
+    setLoading(true);
+    try {
+      const { data } = await API.post('/auth/verify-otp', { email, otp });
+      localStorage.setItem('lakme_token', data.token);
+      localStorage.setItem('lakme_user', JSON.stringify(data.user));
+      setUser(data.user);
+      localStorage.removeItem('lakme_2fa_email');
+      return data;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resendOtp = async (email) => {
+    setLoading(true);
+    const { data } = await API.post('/auth/generate-otp', { email });
+    setLoading(false);
     return data;
   };
 
@@ -36,7 +77,10 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, loading, isAdmin: user?.role === 'admin' }}>
+    <AuthContext.Provider value={{ 
+      user, login, verifyOtp, resendOtp, register, logout, 
+      loading, isAdmin: user?.role === 'admin' 
+    }}>
       {children}
     </AuthContext.Provider>
   );

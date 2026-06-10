@@ -24,9 +24,20 @@ export default function Login() {
     if (weak.test(password)) { toast.error('Please use a stronger password'); return; }
     setLoading(true);
     try {
-      await login(email, password);
-      toast.success('Welcome back! 💄');
-      navigate(searchParams.get('redirect') || '/');
+      console.log('Login.js: Calling login function from AuthContext...');
+      const result = await login(email, password);
+      console.log('Login.js: Result from AuthContext login:', result);
+      console.log('Login.js: result.requires2FA is:', result.requires2FA);
+
+      if (result.requires2FA) {
+        console.log('Login.js: Redirecting to /otp-verification...');
+        navigate('/otp-verification');
+      } else {
+        console.log('Login.js: 2FA not required, showing success toast and navigating to dashboard/home...');
+        toast.success('Welcome back! 💄');
+        console.log('Login.js: Current route after direct login:', searchParams.get('redirect') || '/');
+        navigate(searchParams.get('redirect') || '/');
+      }
     } catch (err) {
       toast.error(err.response?.data?.message || 'Invalid credentials');
     } finally {
