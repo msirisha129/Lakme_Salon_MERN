@@ -9,6 +9,7 @@ const userSchema = new mongoose.Schema({
   role: { type: String, enum: ['user', 'admin'], default: 'user' },
   avatar: { type: String, default: '' },
   loyaltyPoints: { type: Number, default: 0 },
+  voiceTrialsUsed: { type: Number, default: 0 },
   otp: { type: String }, // Hashed OTP
   otpExpires: { type: Date },
   otpAttempts: { type: Number, default: 0 },

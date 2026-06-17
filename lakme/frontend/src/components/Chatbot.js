@@ -322,9 +322,13 @@ export default function Chatbot({ externalOpen, onExternalOpenHandled }) {
 
     } catch (error) {
       setTyping(false);
+      // Surface detailed API error when available
+      console.error('Image analysis error:', error);
+      const serverMessage = error?.serverMessage || error?.message || (error?.response && error.response.data && error.response.data.message);
+      const display = serverMessage ? `Image analysis failed: ${serverMessage}` : "I couldn't analyze the image. Please try again or ensure it's a clear face photo! 📸";
       setMessages(m => [...m, {
         from: 'bot',
-        text: "I couldn't analyze the image. Please try again or ensure it's a clear face photo! 📸"
+        text: display
       }]);
     } finally {
       setLoading(false);

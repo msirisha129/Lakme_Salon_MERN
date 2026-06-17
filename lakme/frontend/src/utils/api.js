@@ -1,9 +1,9 @@
 // Use axios' browser build to avoid webpack/node core polyfill issues
 // Lightweight fetch-based API wrapper to avoid bundling node-only modules (axios pulls node adapters)
-const defaultHost = window.location.hostname;
-const BASE =
-  process.env.REACT_APP_API_URL ||
-  'http://localhost:5000/api';
+const BASE = process.env.REACT_APP_API_URL;
+if (!BASE) {
+  console.error('REACT_APP_API_URL is not set. Please set it in your production environment.');
+}
 function authHeaders() {
   const token = localStorage.getItem('lakme_token');
   return token ? { Authorization: `Bearer ${token}` } : {};

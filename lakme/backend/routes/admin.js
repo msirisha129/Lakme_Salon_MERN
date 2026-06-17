@@ -5,6 +5,7 @@ const User = require('../models/User');
 const Service = require('../models/Service');
 const { protect, adminOnly } = require('../middleware/auth');
 const Log = require('../models/Log'); // Import Log model
+const VoiceCallLog = require('../models/VoiceCallLog');
 const { sendBookingConfirmation } = require('../middleware/emailService');
 const startReminderJob = require('../middleware/reminderJob');
 
@@ -41,14 +42,85 @@ router.get('/stats', protect, adminOnly, async (req, res) => {
       .sort({ createdAt: -1 })
       .limit(5);
 
+    // Voice stats
+    const totalCalls = await VoiceCallLog.countDocuments();
+    const totalSecondsAgg = await VoiceCallLog.aggregate([
+      { $group: { _id: null, totalSeconds: { $sum: '$durationSeconds' } } }
+    ]);
+    const totalMinutes = Math.round((totalSecondsAgg[0]?.totalSeconds || 0) / 60);
+    const voiceUsers = await VoiceCallLog.distinct('user').then(a => a.filter(Boolean).length);
+    const successfulCalls = await VoiceCallLog.countDocuments({ status: 'success' });
+    const failedCalls = await VoiceCallLog.countDocuments({ status: 'failed' });
+
     res.json({
       success: true,
       data: {
         totalBookings, confirmedBookings, totalUsers,
         totalRevenue: totalRevenue[0]?.total || 0,
-        recentBookings
+        recentBookings,
+        voice: {
+          totalCalls,
+          totalMinutes,
+          totalUsers: voiceUsers,
+          successfulCalls,
+          failedCalls
+        }
       }
     });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Call logs summary
+router.get('/call-logs', protect, adminOnly, async (req, res) => {
+  try {
+    const totalCalls = await VoiceCallLog.countDocuments();
+    const totalSecondsAgg = await VoiceCallLog.aggregate([
+      { $group: { _id: null, totalSeconds: { $sum: '$durationSeconds' } } }
+    ]);
+    const totalMinutes = Math.round((totalSecondsAgg[0]?.totalSeconds || 0) / 60);
+    const totalUsers = await VoiceCallLog.distinct('user').then(a => a.filter(Boolean).length);
+    const successfulCalls = await VoiceCallLog.countDocuments({ status: 'success' });
+    const failedCalls = await VoiceCallLog.countDocuments({ status: 'failed' });
+
+    res.json({
+      success: true,
+      data: { totalCalls, totalMinutes, totalUsers, successfulCalls, failedCalls }
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Call logs list (paginated)
+router.get('/call-logs/list', protect, adminOnly, async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page || '1', 10));
+    const limit = Math.max(10, parseInt(req.query.limit || '50', 10));
+    const skip = (page - 1) * limit;
+
+    const docs = await VoiceCallLog.find()
+      .populate('user', 'name email voiceTrialsUsed')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    const total = await VoiceCallLog.countDocuments();
+
+    const rows = docs.map(d => ({
+      user: d.user?._id || null,
+      name: d.user?.name || '',
+      email: d.email || d.user?.email || '',
+      plan: d.plan || '',
+      durationMinutes: d.durationMinutes || 0,
+      callType: d.callType,
+      status: d.status,
+      serviceName: d.serviceName || '',
+      createdAt: d.createdAt
+    }));
+
+    res.json({ success: true, data: { total, page, limit, rows } });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 
-const TABS = ['Dashboard', 'Bookings', 'Services', 'Users', 'Logs'];
+const TABS = ['Dashboard', 'Bookings', 'Services', 'Logs', 'Analytics', 'Billing'];
 const CATS = ['Hair', 'Skin', 'Nails', 'Bridal', 'Makeup', 'Spa'];
 
 export default function Admin() {
@@ -20,20 +20,27 @@ export default function Admin() {
   const [sForm, setSForm] = useState({ name: '', category: 'Hair', description: '', price: '', duration: '', popular: false });
   const [loading, setLoading] = useState(false);
   const [logTab, setLogTab] = useState('booking');
+  const [voiceStats, setVoiceStats] = useState({});
+  const [voiceRows, setVoiceRows] = useState([]);
   const [logs, setLogs] = useState([]);
   const [logsLoading, setLogsLoading] = useState(false);
   useEffect(() => {
     if (!user || user.role !== 'admin') { navigate('/'); return; }
+    if (tab === 'Billing') { navigate('/admin/billing'); return; }
     loadData();
-  }, [user]);
+  }, [user, tab]);
 
   const loadData = async () => {
     const [st, bk, sv] = await Promise.allSettled([
       API.get('/admin/stats'), API.get('/bookings/admin/all'), API.get('/services')
     ]);
     if (st.status === 'fulfilled') setStats(st.value.data.data || {});
+    if (st.status === 'fulfilled' && st.value.data.data?.voice) setVoiceStats(st.value.data.data.voice || {});
     if (bk.status === 'fulfilled') setBookings(bk.value.data.data || []);
     if (sv.status === 'fulfilled') setServices(sv.value.data.data || []);
+    // Ensure voice rows and logs are loaded for persistence across refresh
+    try { loadVoiceLogs(1); } catch (e) { /* ignore */ }
+    try { loadLogs('booking'); } catch (e) { /* ignore */ }
   };
 
   const updateBookingStatus = async (id, status) => {
@@ -128,6 +135,17 @@ export default function Admin() {
   }
 };
 
+const loadVoiceLogs = async (page = 1) => {
+  try {
+    const { data } = await API.get(`/admin/call-logs/list?page=${page}&limit=50`);
+    if (data.success) {
+      setVoiceRows(data.data.rows || []);
+    }
+  } catch (e) {
+    toast.error('Failed to load voice logs');
+  }
+};
+
 const downloadLogs = (type) => {
   if (!logs.length) { toast.error('No logs to download'); return; }
   
@@ -196,22 +214,51 @@ const downloadLogs = (type) => {
         <div className="container">
           <span style={{ fontSize: 11, letterSpacing: 4, color: 'var(--gold)', textTransform: 'uppercase' }}>Admin Panel</span>
           <h1 style={{ color: 'white', fontSize: 'clamp(1.6rem, 3vw, 2.5rem)', marginTop: 8 }}>Lakmé Salon Dashboard</h1>
+        
+        
+        
         </div>
+
       </div>
 
       {/* Tabs */}
-      <div style={{ background: 'white', borderBottom: '1px solid var(--border-light)', position: 'sticky', top: 72, zIndex: 100 }}>
-        <div className="container" style={{ display: 'flex', gap: 0 }}>
-          {TABS.map(t => (
-            <button key={t} onClick={() => setTab(t)} style={{
-              padding: '16px 28px', fontSize: 13, fontWeight: tab === t ? 600 : 400,
-              color: tab === t ? 'var(--gold)' : 'var(--text-secondary)',
-              borderBottom: tab === t ? '2px solid var(--gold)' : '2px solid transparent',
-              background: 'none', cursor: 'pointer', transition: 'all 0.2s', letterSpacing: 0.5
-            }}>{t}</button>
-          ))}
-        </div>
-      </div>
+<div
+  style={{
+    background: 'white',
+    borderBottom: '1px solid var(--border-light)',
+    position: 'sticky',
+    top: 72,
+    zIndex: 100
+  }}
+>
+  <div className="container" style={{ display: 'flex', gap: 0 }}>
+    {TABS.map(t => (
+      <button
+        key={t}
+        onClick={() => {
+          if (t === "Billing") {
+            navigate("/admin/billing");
+          } else {
+            setTab(t);
+          }
+        }}
+        style={{
+          padding: '16px 28px',
+          fontSize: 13,
+          fontWeight: tab === t ? 600 : 400,
+          color: tab === t ? 'var(--gold)' : 'var(--text-secondary)',
+          borderBottom: tab === t ? '2px solid var(--gold)' : '2px solid transparent',
+          background: 'none',
+          cursor: 'pointer',
+          transition: 'all 0.2s',
+          letterSpacing: 0.5
+        }}
+      >
+        {t}
+      </button>
+    ))}
+  </div>
+</div>
 
       <div className="container" style={{ padding: '32px 24px' }}>
 
@@ -219,7 +266,7 @@ const downloadLogs = (type) => {
         {tab === 'Dashboard' && (
           <div>
             <div className="grid-4" style={{ marginBottom: 40 }}>
-              {statCards.map((s, i) => (
+                {statCards.map((s, i) => (
                 <div key={i} style={{ background: 'white', borderRadius: 12, padding: '24px', border: '1px solid var(--border-light)', display: 'flex', alignItems: 'center', gap: 16 }}>
                   <div style={{ width: 48, height: 48, borderRadius: 10, background: `${s.color}15`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: s.color, flexShrink: 0 }}>{s.icon}</div>
                   <div>
@@ -228,6 +275,27 @@ const downloadLogs = (type) => {
                   </div>
                 </div>
               ))}
+            </div>
+
+            {/* Voice summary cards */}
+            <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', marginBottom: 12 }}>Voice Assistant</h3>
+            <div className="grid-4" style={{ marginBottom: 24 }}>
+              <div style={{ background: 'white', borderRadius: 12, padding: '18px', border: '1px solid var(--border-light)' }}>
+                <div style={{ fontSize: 20, fontWeight: 700 }}>{voiceStats.totalCalls || 0}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Total Calls</div>
+              </div>
+              <div style={{ background: 'white', borderRadius: 12, padding: '18px', border: '1px solid var(--border-light)' }}>
+                <div style={{ fontSize: 20, fontWeight: 700 }}>{voiceStats.totalMinutes || 0}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Total Minutes</div>
+              </div>
+              <div style={{ background: 'white', borderRadius: 12, padding: '18px', border: '1px solid var(--border-light)' }}>
+                <div style={{ fontSize: 20, fontWeight: 700 }}>{voiceStats.totalUsers || 0}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Active Users</div>
+              </div>
+              <div style={{ background: 'white', borderRadius: 12, padding: '18px', border: '1px solid var(--border-light)' }}>
+                <div style={{ fontSize: 20, fontWeight: 700 }}>{voiceStats.successfulCalls || 0}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Successful Calls</div>
+              </div>
             </div>
 
             <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.4rem', marginBottom: 20 }}>Recent Bookings</h3>
@@ -459,6 +527,38 @@ const downloadLogs = (type) => {
                   </tbody>
                 </table>
               )}
+            </div>
+          </div>
+        )}
+
+        {tab === 'Analytics' && (
+          <div>
+            <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.4rem', marginBottom: 20 }}>Voice Call Logs</h3>
+            <div style={{ background: 'white', borderRadius: 12, border: '1px solid var(--border-light)', overflow: 'auto', marginBottom: 20 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: 'var(--cream)' }}>
+                    {['Date','User','Email','Plan','Call Type','Duration (mins)','Status','Service','Trials'].map(h => (
+                      <th key={h} style={{ padding: '14px 20px', fontSize: 11, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--text-muted)', textAlign: 'left', fontWeight: 500 }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {voiceRows.map((r, i) => (
+                    <tr key={i} style={{ borderTop: '1px solid var(--border-light)' }}>
+                      <td style={{ padding: '12px 16px' }}>{new Date(r.createdAt).toLocaleString('en-IN')}</td>
+                      <td style={{ padding: '12px 16px' }}>{r.name}</td>
+                      <td style={{ padding: '12px 16px' }}>{r.email}</td>
+                      <td style={{ padding: '12px 16px' }}>{r.plan}</td>
+                      <td style={{ padding: '12px 16px' }}>{r.callType}</td>
+                      <td style={{ padding: '12px 16px' }}>{r.durationMinutes}</td>
+                      <td style={{ padding: '12px 16px' }}>{r.status}</td>
+                      <td style={{ padding: '12px 16px' }}>{r.serviceName}</td>
+                      <td style={{ padding: '12px 16px' }}>{r.voiceTrialsUsed ? `${r.voiceTrialsUsed}/2` : '0/2'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         )}

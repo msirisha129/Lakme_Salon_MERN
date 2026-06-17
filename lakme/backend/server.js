@@ -2,6 +2,8 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
+const startMonthlyResetJob = require('./middleware/monthlyResetJob');
+const startDailySummaryJob = require('./middleware/dailySummaryJob');
 const path = require('path');
 const startReminderJob = require('./middleware/reminderJob');
 const logger = require('./middleware/logger');
@@ -52,6 +54,7 @@ app.use('/api/users', require('./routes/users'));
 app.use('/api/contact', require('./routes/contact'));
 app.use('/api/ai', require('./routes/ai'));
 app.use('/api/admin', require('./routes/admin'));
+app.use('/api/billing', require('./routes/billing'));
 
 app.get('/test123', (req, res) => {
   res.send('SIRISHA_TEST');
@@ -96,6 +99,8 @@ connectDB();
 
 // start reminder job and keep reference so we can stop it on shutdown
 const reminderTask = startReminderJob();
+startMonthlyResetJob(); // Start the monthly voice call reset job
+startDailySummaryJob(); // Start the daily admin summary job
 
 const server = app.listen(PORT, () => console.log(`🚀 Lakme API running on port ${PORT}`));
 

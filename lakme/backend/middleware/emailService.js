@@ -205,4 +205,68 @@ async function sendReminderEmail({ toEmail, toName, serviceName, timeSlot }) {
   }
 }
 
-module.exports = { sendBookingConfirmation, sendReminderEmail };
+async function sendDailySummaryEmail({ toEmail, toName, newBookingsCount, totalRevenue, newBookingsList }) {
+  const from = process.env.EMAIL_FROM || 'Lakmé Salon <no-reply@lakmesalon.com>';
+  const subject = '📊 Daily Summary - Lakmé Salon Admin';
+
+  const body = `
+    <p>Hello ${toName.split(' ')[0]},</p>
+    <p>Here's your daily summary for new confirmed bookings and revenue from yesterday:</p>
+    ${createDataGrid([
+      { label: "New Bookings", value: newBookingsCount },
+      { label: "Total Revenue", value: `₹${totalRevenue.toLocaleString()}` }
+    ])}
+    ${newBookingsList.length > 0 ? `
+      <p><strong>New Bookings Details:</strong></p>
+      <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
+        <thead>
+          <tr style="background-color: #f8f8f8;">
+            <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">Service</th>
+            <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">Amount</th>
+            <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">Time</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${newBookingsList.map(booking => `
+            <tr>
+              <td style="padding: 10px; border: 1px solid #ddd;">${booking.service}</td>
+              <td style="padding: 10px; border: 1px solid #ddd;">₹${booking.amount.toLocaleString()}</td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${booking.time}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    ` : '<p>No new confirmed bookings yesterday.</p>'}
+    <p style="margin-top: 20px;">Have a productive day!</p>
+  `;
+
+  try {
+    let sent = false;
+    let errors = [];
+
+    if (hasBrevo) {
+      try { await _sendWithBrevo({ from, to: toEmail, subject, html: createEmailTemplate({ title: "Daily Admin Summary", body }) }); sent = true; }
+      catch (brevoErr) { errors.push(`Brevo: ${brevoErr.message}`); }
+    }
+    if (!sent && hasResend && resend) {
+      try { await _sendWithResend({ from, to: toEmail, subject, html: createEmailTemplate({ title: "Daily Admin Summary", body }) }); sent = true; }
+      catch (resendErr) { errors.push(`Resend: ${resendErr.message}`); }
+    }
+    if (!sent && process.env.EMAIL_USER) {
+      try { await _sendWithSMTP({ from, to: toEmail, subject, html: createEmailTemplate({ title: "Daily Admin Summary", body }) }); sent = true; }
+      catch (smtpErr) { errors.push(`SMTP: ${smtpErr.message}`); }
+    }
+
+    if (!sent) {
+      logger.warn('email', `Daily summary email failed for ${toEmail}: ${errors.join(', ')}`);
+      return false;
+    }
+    logger.info('email', `Daily summary email sent to ${toEmail}`);
+    return true;
+  } catch (err) {
+    logger.error('email', `Error sending daily summary email to ${toEmail}: ${err.message}`, { error: err.message });
+    return false;
+  }
+}
+
+module.exports = { sendBookingConfirmation, sendReminderEmail, sendDailySummaryEmail };

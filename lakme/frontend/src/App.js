@@ -15,6 +15,8 @@ import OtpVerification from './pages/OtpVerification';
 import Dashboard from './pages/Dashboard';
 import Admin from './pages/Admin';
 
+import Billing from './pages/Billing.jsx';
+
 
 const ProtectedRoute = ({ children }) => {
   const { user } = useAuth();
@@ -23,9 +25,20 @@ const ProtectedRoute = ({ children }) => {
 
 const AdminRoute = ({ children }) => {
   const { user } = useAuth();
-  return user?.role === 'admin' ? children : <Navigate to="/" />;
-};
 
+  // Not logged in
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  // Logged in but not an admin
+  if (user.role !== "admin") {
+    return <Navigate to="/" replace />;
+  }
+
+  // Admin can access
+  return children;
+};
 function AppContent() {
   const [openChatbot, setOpenChatbot] = useState(false);
   return (
@@ -42,6 +55,7 @@ function AppContent() {
         <Route path="/otp-verification" element={<OtpVerification />} />
         <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
         <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
+        <Route path="/admin/billing" element={<AdminRoute><Billing /></AdminRoute>} />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
 

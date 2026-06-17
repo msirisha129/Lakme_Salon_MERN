@@ -2,6 +2,7 @@
 // Smart booking flow with confirmation, slow Q&A, and validation
 import React from 'react';
 import API from '../utils/api';
+import { useAuth } from '../context/AuthContext';
 
 function VoiceAssistantModal({ onClose }) {
   // ── Original State (moved TIER 1 state to outer component) ──
@@ -14,6 +15,7 @@ function VoiceAssistantModal({ onClose }) {
   const [manualTextInput, setManualTextInput] = React.useState('');
   const [connStats, setConnStats] = React.useState({ quality: 'Good', latency: 0, isOnline: true });
   
+  const [isLimitReached, setIsLimitReached] = React.useState(false);
   const [bookingData, setBookingData] = React.useState({
     name: null,
     phone: null,
@@ -117,6 +119,7 @@ function VoiceAssistantModal({ onClose }) {
       if (navigator.connection) navigator.connection.removeEventListener('change', updateConnectionStats);
     };
   }, []);
+
 
   // Backoff tracker for restarting STT on recoverable errors
   const restartBackoffRef = React.useRef({ attempts: 0, nextDelay: 300 });
@@ -295,6 +298,33 @@ function VoiceAssistantModal({ onClose }) {
     return digits.length === 10;
   }
 
+  // Handle Start Voice click: check access before opening modal
+  async function handleStartVoice() {
+    try {
+      console.log('Start Voice Clicked');
+      const resp = await API.get('/ai/voice-access');
+      console.log('Voice Access Check:', resp);
+      if (resp.data && resp.data.allowed) {
+        setVoiceOpen(true);
+      } else {
+        console.log('Voice Access Denied');
+        setShowSubscriptionModal(true);
+        console.log('Showing Subscription Modal');
+      }
+    } catch (err) {
+      console.log('Voice Access Check:', err);
+      // If 403 with subscription required, show modal
+      if (err.status === 403 || (err.serverMessage && err.serverMessage.includes('subscribe'))) {
+        console.log('Voice Access Denied');
+        setShowSubscriptionModal(true);
+        console.log('Showing Subscription Modal');
+        return;
+      }
+      // fallback: open modal but warn
+      setVoiceOpen(true);
+    }
+  }
+
   // Try to extract a name phrase from a longer user sentence
   function extractNameFromText(text) {
     if (!text) return '';
@@ -418,32 +448,93 @@ function VoiceAssistantModal({ onClose }) {
   // ── TIER 2: Service Fuzzy Matching with Suggestions ──
   async function findSimilarServices(userService) {
     try {
-      const response = await API.get('/api/services');
+      console.log('[TIER2] findSimilarServices - querying services from API');
+      const response = await API.get('/services');
       const services = response.data.map(s => s.name);
-      
-      const lower = userService.toLowerCase();
-      
-      // Direct match
-      const directMatch = services.find(s => s.toLowerCase() === lower);
-      if (directMatch) return { exact: directMatch, similar: [] };
-      
-      // Fuzzy match - check if input contains service keywords
-      const similar = services.filter(s => {
-        const sLower = s.toLowerCase();
-        return lower.includes(sLower.substring(0, 4)) || sLower.includes(lower.substring(0, 4));
-      });
-      
-      return { exact: null, similar: similar.slice(0, 3) }; // Top 3 suggestions
+
+      console.log('[TIER2] services loaded from API:', services.slice(0, 20));
+
+      const lower = (userService || '').toLowerCase().trim();
+      console.log('[TIER2] user speech input:', userService);
+
+      // Alias map for common user words
+      const aliasMap = {
+        haircut: ["men's haircut", "women's haircut", 'hair cut', 'haircut'],
+        facial: ['hydrafacial', 'gold facial', 'cleanup', 'clean up', 'facial'],
+        spa: ['hair spa', 'keratin spa', 'spa'],
+        color: ['hair color', 'global color', 'colour', 'coloring'],
+        beard: ['beard trim', 'beard cut', 'beard']
+      };
+
+      // Normalize available services for matching
+      const normalized = services.map(s => ({ raw: s, lower: s.toLowerCase() }));
+
+      // 1) Exact match
+      const exact = normalized.find(s => s.lower === lower);
+      if (exact) {
+        console.log('[TIER2] matched service exact:', exact.raw);
+        return { exact: exact.raw, similar: [] };
+      }
+
+      // 2) includes() matches (user said 'haircut' and service contains 'hair cut')
+      const includesMatches = normalized.filter(s => s.lower.includes(lower) || lower.includes(s.lower));
+      if (includesMatches.length > 0) {
+        console.log('[TIER2] includes() matches:', includesMatches.map(m => m.raw));
+        return { exact: null, similar: includesMatches.map(m => m.raw).slice(0, 3) };
+      }
+
+      // 3) alias expansion
+      for (const key of Object.keys(aliasMap)) {
+        if (lower.includes(key) || aliasMap[key].some(a => lower.includes(a))) {
+          const aliases = aliasMap[key];
+          // find services that match any alias
+          const aliasMatches = normalized.filter(s => aliases.some(a => s.lower.includes(a)));
+          if (aliasMatches.length > 0) {
+            console.log('[TIER2] alias matches for', key, aliasMatches.map(m => m.raw));
+            return { exact: null, similar: aliasMatches.map(m => m.raw).slice(0, 3) };
+          }
+        }
+      }
+
+      // 4) fuzzy matching (Levenshtein-ish via substring overlaps)
+      const token = lower.split(/\s+/)[0] || lower;
+      const fuzzy = normalized
+        .map(s => ({ raw: s.raw, score: similarityScore(token, s.lower) }))
+        .filter(s => s.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .map(s => s.raw);
+
+      console.log('[TIER2] fuzzy matches:', fuzzy.slice(0, 5));
+
+      const top = fuzzy.slice(0, 3);
+      return { exact: null, similar: top };
     } catch (e) {
       console.warn('[TIER2] Service lookup error:', e);
       return { exact: null, similar: [] };
     }
   }
 
+  // Very small heuristic similarity: counts common character bigrams
+  function similarityScore(a, b) {
+    if (!a || !b) return 0;
+    a = a.toLowerCase(); b = b.toLowerCase();
+    const grams = (s) => {
+      const g = [];
+      for (let i = 0; i < s.length - 1; i++) g.push(s.slice(i, i+2));
+      return g;
+    };
+    const ga = grams(a); const gb = grams(b);
+    if (ga.length === 0 || gb.length === 0) return 0;
+    let common = 0;
+    const gbSet = new Set(gb);
+    ga.forEach(x => { if (gbSet.has(x)) common++; });
+    return common / Math.max(ga.length, gb.length);
+  }
+
   // ── TIER 2: Get Service Details (price, duration) ──
   async function getServiceDetails(serviceName) {
     try {
-      const response = await API.get('/api/services');
+      const response = await API.get('/services');
       const service = response.data.find(s => s.name.toLowerCase() === serviceName.toLowerCase());
       return service || null;
     } catch (e) {
@@ -974,6 +1065,11 @@ function VoiceAssistantModal({ onClose }) {
             setStatusText('reCAPTCHA required');
             return;
           }
+        if (serverMsg.toLowerCase().includes('limit reached')) {
+          setIsLimitReached(true);
+          setStatusText('Limit Reached');
+          return;
+        }
 
           addMessage('assistant', serverMsg);
           speakGroq(serverMsg);
@@ -1385,6 +1481,7 @@ function VoiceAssistantModal({ onClose }) {
 
     try {
       var res = await API.post('/ai/voice-chat', {
+        message: userText, // Added to satisfy moderatePrompt middleware requirement
         messages: [
           { role: 'system', content: 'You are Lakmé Salon assistant. Keep responses under 2 sentences for voice.' },
           ...messagesRef.current.slice(-8).map(m => ({role: m.role, content: m.text})),
@@ -1400,6 +1497,11 @@ function VoiceAssistantModal({ onClose }) {
       speakGroq(reply);
     } catch(e) {
       setConnStats(prev => ({ ...prev, latency: Date.now() - startTime, quality: 'Poor' }));
+      const errorMsg = e?.response?.data?.message || e?.message || "";
+      if (errorMsg.toLowerCase().includes('limit reached')) {
+        setIsLimitReached(true);
+        setStatusText('Limit Reached');
+      }
       var fb = "I'm having trouble connecting. Please try again!";
       addMessage('assistant', fb);
       speakGroq(fb);
@@ -1484,6 +1586,23 @@ function VoiceAssistantModal({ onClose }) {
           'Ready to help'
         )
       ),
+      // Call Limit Reached specialized UI
+      isLimitReached ? React.createElement('div', { style: styles.vmLimitCard },
+        React.createElement('div', { style: styles.vmLimitTitle }, '⚠️ PLAN LIMIT REACHED'),
+        React.createElement('div', { style: styles.vmLimitText }, 
+          'You have reached the free limit of 2 voice calls. Upgrade to the Starter plan to continue your premium beauty experience.'
+        ),
+        React.createElement('button', { 
+          style: styles.vmUpgradeBtn,
+          onClick: () => {
+            stopListening();
+            onClose();
+            window.location.href = '/admin/billing';
+          },
+          onMouseEnter: e => e.currentTarget.style.transform = 'scale(1.05)',
+          onMouseLeave: e => e.currentTarget.style.transform = 'scale(1)'
+        }, 'View Plans & Upgrade 💄')
+      ) : null,
       // Alternative slots tappable UI
       alternativeSlots && alternativeSlots.length > 0 ? React.createElement('div', { style: styles.alternativesWrap },
         React.createElement('div', { style: styles.alternativesLabel }, 'Available alternatives'),
@@ -1577,6 +1696,52 @@ function AIAssistantSection({ onOpenChat }) {
   var [voiceOpen, setVoiceOpen] = React.useState(false);
   var [hoverVoice, setHoverVoice] = React.useState(false);
   var [hoverMsg, setHoverMsg] = React.useState(false);
+  const [showSubscriptionModal, setShowSubscriptionModal] = React.useState(false);
+  const { user } = useAuth();
+
+  function SubscriptionModal({onClose}){
+    // Determine role; default to 'customer' when missing
+    const role = (user && user.role) ? user.role : 'customer';
+
+    // Admin / Salon Owner view
+    if (role === 'admin' || role === 'salonOwner') {
+      return (
+        React.createElement('div',{style:{position:'fixed',inset:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,0.4)',zIndex:2000}},
+          React.createElement('div',{style:{background:'#fff',padding:20,borderRadius:8,width:420,maxWidth:'92%'}},
+            React.createElement('h3',null,'Subscription Required'),
+            React.createElement('p',null,'Your free voice trials are exhausted.\nPlease purchase a subscription plan to continue using the Voice Assistant.'),
+            React.createElement('div',{style:{display:'flex',gap:8,justifyContent:'flex-end',marginTop:12}},
+              React.createElement('button',{onClick:()=>{ window.location.href='/admin/billing'; },style:{padding:'8px 12px',background:'#4caf50',color:'#fff',border:'none',borderRadius:4}},'View Plans'),
+              React.createElement('button',{onClick:()=>{ setShowSubscriptionModal(false); },style:{padding:'8px 12px',background:'#eee',border:'none',borderRadius:4}},'Cancel')
+            )
+          )
+        )
+      );
+    }
+
+    // Customer / Guest view
+    return (
+      React.createElement('div',{style:{position:'fixed',inset:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,0.4)',zIndex:2000}},
+        React.createElement('div',{style:{background:'#fff',padding:20,borderRadius:8,width:420,maxWidth:'92%'}},
+          React.createElement('h3',null,'Voice Assistant Currently Unavailable'),
+          React.createElement('p',null,'This feature is currently unavailable for customers. Please contact the salon directly for assistance.'),
+          React.createElement('div',{style:{display:'flex',gap:8,justifyContent:'flex-end',marginTop:12}},
+            React.createElement('button',{onClick:()=>{
+              // Try navigate to contact section; prefer in-page anchor
+              const salonNumber = window?.LAKME_SALON_PHONE || null;
+              if (salonNumber) {
+                // open WhatsApp
+                window.open(`https://wa.me/${salonNumber.replace(/\D/g,'')}`, '_blank');
+              } else {
+                window.location.href='/#contact';
+              }
+            },style:{padding:'8px 12px',background:'#4caf50',color:'#fff',border:'none',borderRadius:4}},'Contact Salon'),
+            React.createElement('button',{onClick:()=>{ setShowSubscriptionModal(false); },style:{padding:'8px 12px',background:'#eee',border:'none',borderRadius:4}},'Cancel')
+          )
+        )
+      )
+    );
+  }
 
   // ── TIER 1: Offline detection ──
   React.useEffect(() => {
@@ -1632,6 +1797,33 @@ function AIAssistantSection({ onOpenChat }) {
     }
   };
 
+  // Handle Start Voice click: check access before opening modal
+  async function handleStartVoice() {
+    try {
+      console.log('Start Voice Clicked');
+      const resp = await API.get('/ai/voice-access');
+      console.log('Voice Access Check:', resp);
+      if (resp.data && resp.data.allowed) {
+        setVoiceOpen(true);
+      } else {
+        console.log('Voice Access Denied');
+        setShowSubscriptionModal(true);
+        console.log('Showing Subscription Modal');
+      }
+    } catch (err) {
+      console.log('Voice Access Check:', err);
+      // If 403 with subscription required, show modal
+      if (err.status === 403 || (err.serverMessage && err.serverMessage.includes('subscribe'))) {
+        console.log('Voice Access Denied');
+        setShowSubscriptionModal(true);
+        console.log('Showing Subscription Modal');
+        return;
+      }
+      // fallback: open modal but warn
+      setVoiceOpen(true);
+    }
+  }
+
   return React.createElement('section', { style: styles.section },
     React.createElement('div', { style: styles.bgDecor, 'aria-hidden':'true' },
       React.createElement('div', { style: styles.bgLine1 }),
@@ -1656,7 +1848,7 @@ function AIAssistantSection({ onOpenChat }) {
             React.createElement('span',{style:styles.cardFeature},'✅ Details confirmed'),
             React.createElement('span',{style:styles.cardFeature},'🛡️ Smart validation')
           ),
-          React.createElement('button',{onClick:()=>setVoiceOpen(true),style:styles.btnGold},'Start Voice Assistant →')
+          React.createElement('button',{onClick:handleStartVoice,style:styles.btnGold},'Start Voice Assistant →')
         ),
         React.createElement('div',{style:styles.orDivider},React.createElement('div',{style:styles.orLine}),React.createElement('span',{style:styles.orText},'or'),React.createElement('div',{style:styles.orLine})),
         React.createElement('div',{style:Object.assign({},styles.card,hoverMsg?styles.cardHover:{}),onMouseEnter:()=>setHoverMsg(true),onMouseLeave:()=>setHoverMsg(false)},
@@ -1743,6 +1935,7 @@ function AIAssistantSection({ onOpenChat }) {
       ) : null
     ),
     voiceOpen ? React.createElement(VoiceAssistantModal,{onClose:()=>setVoiceOpen(false)}) : null
+    , showSubscriptionModal ? React.createElement(SubscriptionModal,{onClose:()=>setShowSubscriptionModal(false)}) : null
   );
 }
 
@@ -1810,7 +2003,11 @@ var styles = {
   alternativesWrap: { padding: '10px 16px', display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center', background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid rgba(255,255,255,0.02)' },
   alternativesLabel: { fontSize: 12, color: '#c9a84c', fontWeight: 700, letterSpacing: '0.06em' },
   alternativesList: { display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center', marginTop: 6 },
-  alternativeBtn: { padding: '8px 12px', background: 'transparent', border: '1px solid rgba(201,168,76,0.25)', color: '#f5f0e8', borderRadius: 6, cursor: 'pointer', fontSize: 13 }
+  alternativeBtn: { padding: '8px 12px', background: 'transparent', border: '1px solid rgba(201,168,76,0.25)', color: '#f5f0e8', borderRadius: 6, cursor: 'pointer', fontSize: 13 },
+  vmLimitCard: { background: 'rgba(200, 0, 59, 0.08)', border: '1px solid rgba(200, 0, 59, 0.2)', borderRadius: '12px', padding: '24px 20px', margin: '10px 24px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', boxShadow: '0 4px 15px rgba(200, 0, 59, 0.1)' },
+  vmLimitTitle: { color: '#ff6b6b', fontSize: '13px', fontWeight: '700', letterSpacing: '1px', textTransform: 'uppercase' },
+  vmLimitText: { color: '#f5f0e8', fontSize: '14px', lineHeight: '1.6', opacity: 0.9 },
+  vmUpgradeBtn: { background: 'linear-gradient(135deg, #c9a84c, #a07830)', color: '#0a0a0a', border: 'none', borderRadius: '50px', padding: '10px 24px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', transition: 'transform 0.2s' }
 };
 
 export default AIAssistantSection;

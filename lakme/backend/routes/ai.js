@@ -11,8 +11,10 @@ const Booking = require('../models/Booking');
 const User = require('../models/User');
 const { protect } = require('../middleware/auth');
 const { consumeUserLimit, consumeEmailLimit } = require('../middleware/bookingRateLimiter');
+const { checkPlan } = require('../middleware/subscriptionCheck');
 const { moderatePrompt } = require('../middleware/moderation');
 const logger = require('../utils/logger');
+const Subscription = require('../models/Subscription');
 
 // Configure multer for image uploads
 const storage = multer.memoryStorage();
@@ -289,8 +291,36 @@ router.post('/chat', moderatePrompt, async (req, res) => {
   }
 });
 
+// Voice access check for frontend before initializing microphone
+router.get('/voice-access', async (req, res) => {
+  try {
+    // Prefer per-user subscription when available
+    let sub = null;
+    const userId = req.user?._id || null;
+    if (userId) sub = await Subscription.findOne({ user: userId });
+    if (!sub) sub = await Subscription.findOne();
+
+    // If voice trial middleware would allow, check user's trial count
+    const User = require('../models/User');
+    let voiceTrialAllowed = false;
+    if (userId) {
+      const u = await User.findById(userId).select('voiceTrialsUsed');
+      if (u && (u.voiceTrialsUsed || 0) < 2) voiceTrialAllowed = true;
+    }
+
+    // Determine access
+    if (voiceTrialAllowed) return res.json({ success: true, allowed: true, reason: 'trial' });
+    if (!sub || sub.status !== 'active') return res.status(403).json({ success: false, allowed: false, code: 'SUBSCRIPTION_REQUIRED', message: 'Please subscribe to use this feature.' });
+    // For basic plan enforcement, allow any active plan
+    return res.json({ success: true, allowed: true, reason: 'subscribed', plan: sub.plan });
+  } catch (err) {
+    console.error('voice-access error:', err && err.message);
+    res.status(500).json({ success: false, allowed: false, message: 'Error checking voice access' });
+  }
+});
+
 // Image analysis endpoint for hairstyle suggestions
-router.post('/analyze-image', upload.single('image'), async (req, res) => {
+router.post('/analyze-image', checkPlan('Growth'), upload.single('image'), async (req, res) => {
   logger.info('app', 'Image Analysis API call received.', { preferences: req.body.preferences, concerns: req.body.concerns });
 
   try {
@@ -583,19 +613,21 @@ router.post('/hair-advice', moderatePrompt, async (req, res) => {
 });
 
 // Quick booking via AI
-router.post('/quick-book', protect, moderatePrompt, async (req, res) => {
+router.post('/quick-book', protect, checkPlan('Premium'), moderatePrompt, async (req, res) => {
   try {
     const { serviceName, date, timeSlot } = req.body;
 
-    const service = await Service.findOne({
-      name: { $regex: serviceName, $options: 'i' }
-    });
+    console.log('Transcript (quick-book):', serviceName);
+    const services = await Service.find().select('name description price duration popular');
+    const { service: matchedService, debug } = await matchServiceFromTranscript(serviceName, services);
+    console.log('Detected Intent: quick-book');
+    console.log('Extracted Service:', debug.extractedService);
+    console.log('Available Services:', debug.availableServices);
+    console.log('Matched Service:', debug.matchedService, 'Reason:', debug.reason);
 
+    const service = matchedService;
     if (!service) {
-      return res.status(404).json({ 
-        success: false, 
-        message: `Service "${serviceName}" not found. Please check available services.` 
-      });
+      return res.status(404).json({ success: false, message: `Service "${serviceName}" not found.`, debug });
     }
 
     // validate date
@@ -618,10 +650,12 @@ router.post('/quick-book', protect, moderatePrompt, async (req, res) => {
       if (!rl.ok) return res.status(429).json({ success: false, message: 'Booking limit reached for today. Please contact support or try tomorrow.' });
     } catch (e) { console.warn('User booking limiter error', e && e.message); }
 
+    const isoDate = parsed.toISOString().slice(0,10);
+    console.log('Creating booking with ISO date:', isoDate);
     const booking = await Booking.create({
       user: req.user._id,
       service: service._id,
-      date: parsed,
+      date: new Date(isoDate),
       timeSlot,
       totalAmount: service.price,
       status: 'confirmed'
@@ -686,9 +720,40 @@ router.post('/quick-book', protect, moderatePrompt, async (req, res) => {
   }
 });
 
-// Voice chat endpoint
-router.post('/voice-chat', moderatePrompt, async (req, res) => {
+// Voice limit checker middleware
+async function checkVoiceLimit(req, res, next) {
   try {
+    const sub = await Subscription.findOne();
+    if (!sub || sub.plan === 'Free') {
+      if ((sub?.voiceCallsUsed || 0) >= 2) {
+        return res.status(403).json({ success: false, message: "Voice agent call limit reached. Please upgrade to the Starter plan to remove this limit. 💄" });
+      }
+      if (sub) {
+        sub.voiceCallsUsed += 1;
+        await sub.save();
+      }
+    }
+    next();
+  } catch (err) { next(); }
+}
+
+// Voice chat endpoint
+const checkVoiceTrial = require('../middleware/checkVoiceTrial');
+const VoiceCallLog = require('../models/VoiceCallLog');
+
+router.post('/voice-chat', protect, checkVoiceTrial, checkPlan('Growth'), checkVoiceLimit, moderatePrompt, async (req, res) => {
+  console.log("DEBUG: /voice-chat req.body received:", req.body);
+  const start = new Date();
+  let logEntry = null;
+  try {
+    // Validation check: ensure history array is provided
+    if (!req.body.messages || !Array.isArray(req.body.messages)) {
+      return res.status(400).json({
+        success: false,
+        message: "Messages array is required"
+      });
+    }
+
     const completion = await groq.chat.completions.create({
       messages: req.body.messages,
       model: 'llama-3.3-70b-versatile',
@@ -697,42 +762,95 @@ router.post('/voice-chat', moderatePrompt, async (req, res) => {
     });
 
     res.json(completion);
+    // Log success
+    try {
+      const end = new Date();
+      const durationSec = Math.round((end - start) / 1000);
+      const durationMin = +(durationSec / 60).toFixed(2);
+      const userId = req.user?._id || null;
+      const email = req.user?.email || '';
+      const plan = (await (require('../models/Subscription').findOne({ user: userId })) )?.plan || '';
+      logEntry = await VoiceCallLog.create({
+        user: userId,
+        email,
+        plan,
+        callType: 'voice-chat',
+        startTime: start,
+        endTime: end,
+        durationSeconds: durationSec,
+        durationMinutes: durationMin,
+        bookingCreated: false,
+        serviceName: '',
+        status: 'success'
+      });
+    } catch (e) { console.warn('Voice log creation failed:', e && e.message); }
 
   } catch (err) {
     console.error('Voice chat error:', err);
     res.status(500).json({
       error: err.message
     });
+    // Log failure
+    try {
+      const end = new Date();
+      const durationSec = Math.round((end - start) / 1000);
+      const durationMin = +(durationSec / 60).toFixed(2);
+      const userId = req.user?._id || null;
+      const email = req.user?.email || '';
+      const plan = (await (require('../models/Subscription').findOne({ user: userId })) )?.plan || '';
+      await VoiceCallLog.create({
+        user: userId,
+        email,
+        plan,
+        callType: 'voice-chat',
+        startTime: start,
+        endTime: end,
+        durationSeconds: durationSec,
+        durationMinutes: durationMin,
+        bookingCreated: false,
+        serviceName: '',
+        status: 'failed'
+      });
+    } catch (e) { console.warn('Voice log creation failed:', e && e.message); }
   }
 });
 
 // Voice booking endpoint
-router.post('/voice-book', protect, moderatePrompt, async (req, res) => {
+router.post('/voice-book', protect, checkVoiceTrial, checkPlan('Growth'), moderatePrompt, async (req, res) => {
+  const start = new Date();
+  let logId = null;
   try {
     const { serviceName, dateText, timeSlot } = req.body;
+    console.log('Transcript:', serviceName);
+    // load all services for matching
+    const services = await Service.find().select('name description price duration popular');
+    const { service: matchedService, debug } = await matchServiceFromTranscript(serviceName, services);
+    console.log('Detected Intent: voice-book');
+    console.log('Extracted Service:', debug.extractedService);
+    console.log('Available Services:', debug.availableServices);
+    console.log('Matched Service:', debug.matchedService, 'Reason:', debug.reason);
 
-    const service = await Service.findOne({
-      name: { $regex: serviceName, $options: 'i' }
-    });
-    
+    let service = matchedService;
     if (!service) {
-      // Try to find fuzzy matches in name or description
+      // fallback: try regex on first token
+      const token = (debug.extractedService || serviceName || '').split(' ')[0] || serviceName;
       const suggestions = await Service.find({
         $or: [
-          { name: { $regex: serviceName.split(' ')[0] || serviceName, $options: 'i' } },
-          { description: { $regex: serviceName.split(' ')[0] || serviceName, $options: 'i' } }
+          { name: { $regex: token, $options: 'i' } },
+          { description: { $regex: token, $options: 'i' } }
         ]
       }).limit(5).select('name');
 
       if (suggestions && suggestions.length > 0) {
         const names = suggestions.map(s => s.name).join(', ');
-        return res.json({ success: false, message: `Sorry, I couldn't find "${serviceName}". Did you mean: ${names}? Please try one of these or visit the booking page.` , suggestions: suggestions.map(s=>s.name) });
+        console.log('Service lookup failed; suggestions:', names);
+        return res.json({ success: false, message: `Sorry, I couldn't find "${serviceName}". Did you mean: ${names}? Please try one of these or visit the booking page.`, suggestions: suggestions.map(s=>s.name), debug });
       }
 
-      // Fallback: suggest some popular services
       const popular = await Service.find({ popular: true }).limit(5).select('name');
       const popularNames = popular.map(p => p.name).join(', ');
-      return res.json({ success: false, message: `Sorry, I couldn't find "${serviceName}". Popular services include: ${popularNames}. Please try the booking page.` , suggestions: popular.map(p=>p.name) });
+      console.log('Service lookup failed; no suggestions; returning popular list');
+      return res.json({ success: false, message: `Sorry, I couldn't find "${serviceName}". Popular services include: ${popularNames}. Please try the booking page.`, suggestions: popular.map(p=>p.name), debug });
     }
 
     let bookingDate = new Date();
@@ -792,15 +910,38 @@ router.post('/voice-book', protect, moderatePrompt, async (req, res) => {
 
     let booking;
     try {
+      const isoDate = bookingDate.toISOString().slice(0,10);
+      console.log('Creating booking with ISO date:', isoDate);
       booking = await Booking.create({
         user: req.user._id,
         service: service._id,
-        date: bookingDate,
+        date: new Date(isoDate),
         timeSlot: matchedSlot,
         stylist: 'Any Available',
         totalAmount: service.price,
         status: 'confirmed'
       });
+      // create success log
+      try {
+        const end = new Date();
+        const durationSec = Math.round((end - start) / 1000);
+        const durationMin = +(durationSec / 60).toFixed(2);
+        const plan = (await (require('../models/Subscription').findOne({ user: req.user._id })) )?.plan || '';
+        const log = await VoiceCallLog.create({
+          user: req.user._id,
+          email: req.user.email || '',
+          plan,
+          callType: 'voice-book',
+          startTime: start,
+          endTime: end,
+          durationSeconds: durationSec,
+          durationMinutes: durationMin,
+          bookingCreated: true,
+          serviceName: service.name,
+          status: 'success'
+        });
+        logId = log._id;
+      } catch (e) { console.warn('Voice log creation failed:', e && e.message); }
     } catch (err) {
       if (err && err.code === 11000) {
         return res.status(409).json({ success: false, message: `Sorry, ${matchedSlot} was just booked. Please choose another slot.` });
@@ -869,6 +1010,26 @@ router.post('/voice-book', protect, moderatePrompt, async (req, res) => {
       user: req.user ? req.user._id : null
     });
     await logger.error('voice', `Voice booking failed: ${err.message}`, { userId: req.user?._id, body: req.body });
+    // Attempt to log failure
+    try {
+      const end = new Date();
+      const durationSec = Math.round((end - start) / 1000);
+      const durationMin = +(durationSec / 60).toFixed(2);
+      const plan = (await (require('../models/Subscription').findOne({ user: req.user?._id })) )?.plan || '';
+      await VoiceCallLog.create({
+        user: req.user?._id || null,
+        email: req.user?.email || '',
+        plan,
+        callType: 'voice-book',
+        startTime: start,
+        endTime: end,
+        durationSeconds: durationSec,
+        durationMinutes: durationMin,
+        bookingCreated: false,
+        serviceName: serviceName || '',
+        status: 'failed'
+      });
+    } catch (e) { console.warn('Voice log creation failed:', e && e.message); }
     res.status(500).json({ success: false, message: 'Internal server error', error: err.message });
   }
 });
@@ -894,22 +1055,17 @@ router.post('/voice-book/dev', moderatePrompt, async (req, res) => {
     const { toEmail, toName, serviceName, dateText, timeSlot } = req.body;
     if (!toEmail || !serviceName) return res.status(400).json({ success: false, message: 'toEmail and serviceName required' });
 
-    const service = await Service.findOne({ name: { $regex: serviceName, $options: 'i' } });
+    console.log('Transcript (dev voice-book):', serviceName);
+    const services = await Service.find().select('name description price duration popular');
+    const { service: matchedService, debug } = await matchServiceFromTranscript(serviceName, services);
+    console.log('Detected Intent: dev-voice-book');
+    console.log('Extracted Service:', debug.extractedService);
+    console.log('Available Services:', debug.availableServices);
+    console.log('Matched Service:', debug.matchedService, 'Reason:', debug.reason);
+
+    const service = matchedService;
     if (!service) {
-      // Try fuzzy matches
-      const suggestions = await Service.find({
-        $or: [
-          { name: { $regex: serviceName.split(' ')[0] || serviceName, $options: 'i' } },
-          { description: { $regex: serviceName.split(' ')[0] || serviceName, $options: 'i' } }
-        ]
-      }).limit(5).select('name');
-
-      if (suggestions && suggestions.length > 0) {
-        return res.status(404).json({ success: false, message: `Service "${serviceName}" not found. Did you mean: ${suggestions.map(s=>s.name).join(', ')}?`, suggestions: suggestions.map(s=>s.name) });
-      }
-
-      const popular = await Service.find({ popular: true }).limit(5).select('name');
-      return res.status(404).json({ success: false, message: `Service "${serviceName}" not found. Popular services include: ${popular.map(p=>p.name).join(', ')}`, suggestions: popular.map(p=>p.name) });
+      return res.status(404).json({ success: false, message: `Service "${serviceName}" not found`, debug });
     }
 
     // parse date using shared parser
@@ -923,10 +1079,12 @@ router.post('/voice-book/dev', moderatePrompt, async (req, res) => {
       userDoc = await User.create({ name: toName || 'Guest User', email: toEmail, password: 'dev-temp-pass' });
     }
 
+    const isoDateDev = bookingDate.toISOString().slice(0,10);
+    console.log('Creating dev booking with ISO date:', isoDateDev);
     const booking = await Booking.create({
       user: userDoc._id,
       service: service._id,
-      date: bookingDate,
+      date: new Date(isoDateDev),
       timeSlot: timeSlot || '12:00 PM',
       stylist: 'Any Available',
       totalAmount: service.price,
@@ -974,8 +1132,19 @@ router.post('/voice-book/guest', guestRateLimiter, moderatePrompt, async (req, r
       if (!vr.ok) return res.status(403).json({ success: false, message: vr.message || 'reCAPTCHA failed' });
     }
 
-    const service = await Service.findOne({ name: { $regex: serviceName, $options: 'i' } });
-    if (!service) return res.status(404).json({ success: false, message: `Service "${serviceName}" not found` });
+    // Attempt robust service matching from transcript
+    console.log('Transcript:', serviceName);
+    const services = await Service.find().select('name description price duration popular');
+    const { service: matchedService, debug } = await matchServiceFromTranscript(serviceName, services);
+    console.log('Detected Intent: guest-voice-book');
+    console.log('Extracted Service:', debug.extractedService);
+    console.log('Available Services:', debug.availableServices);
+    console.log('Matched Service:', debug.matchedService, 'Reason:', debug.reason);
+
+    let service = matchedService;
+    if (!service) {
+      return res.status(404).json({ success: false, message: `Service "${serviceName}" not found`, debug });
+    }
 
     const bookingDate = parseBookingDate(dateText) || (function(){ const d=new Date(); d.setDate(d.getDate()+1); d.setHours(12,0,0,0); return d; })();
 
@@ -1016,12 +1185,14 @@ router.post('/voice-book/guest', guestRateLimiter, moderatePrompt, async (req, r
 
     let booking;
     try {
+      const isoDateGuest = bookingDate.toISOString().slice(0,10);
+      console.log('Creating guest booking with ISO date:', isoDateGuest);
       booking = await Booking.create({
         user: null,
         guestEmail: toEmail,
         guestName: toName || 'Guest',
         service: service._id,
-        date: bookingDate,
+        date: new Date(isoDateGuest),
         timeSlot: matchedSlot,
         stylist: 'Any Available',
         totalAmount: service.price,
@@ -1064,36 +1235,40 @@ router.post('/voice-book/guest', guestRateLimiter, moderatePrompt, async (req, r
 });
 
 // Chat booking endpoint
-router.post('/chat-book', protect, moderatePrompt, async (req, res) => {
+router.post('/chat-book', protect, checkVoiceTrial, checkPlan('Growth'), moderatePrompt, async (req, res) => {
   try {
     const { serviceName, dateText, timeSlot } = req.body;
 
-    const service = await Service.findOne({
-      name: { $regex: serviceName, $options: 'i' }
-    });
-    
+    console.log('Transcript (chat-book):', serviceName);
+    const services = await Service.find().select('name description price duration popular');
+    const { service: matchedService, debug } = await matchServiceFromTranscript(serviceName, services);
+    console.log('Detected Intent: chat-book');
+    console.log('Extracted Service:', debug.extractedService);
+    console.log('Available Services:', debug.availableServices);
+    console.log('Matched Service:', debug.matchedService, 'Reason:', debug.reason);
+
+    const service = matchedService;
     if (!service) {
-      // Try to find fuzzy matches in name or description
+      // Try old fallback suggestions
       const suggestions = await Service.find({
         $or: [
-          { name: { $regex: serviceName.split(' ')[0] || serviceName, $options: 'i' } },
-          { description: { $regex: serviceName.split(' ')[0] || serviceName, $options: 'i' } }
+          { name: { $regex: (debug.extractedService || serviceName).split(' ')[0] || serviceName, $options: 'i' } },
+          { description: { $regex: (debug.extractedService || serviceName).split(' ')[0] || serviceName, $options: 'i' } }
         ]
       }).limit(5).select('name');
 
       if (suggestions && suggestions.length > 0) {
         const names = suggestions.map(s => s.name).join(', ');
-        return res.json({ success: false, message: `Sorry, I couldn't find "${serviceName}". Did you mean: ${names}? Please try one of these or visit the booking page.` , suggestions: suggestions.map(s=>s.name) });
+        return res.json({ success: false, message: `Sorry, I couldn't find "${serviceName}". Did you mean: ${names}? Please try one of these or visit the booking page.`, suggestions: suggestions.map(s=>s.name), debug });
       }
 
-      // Fallback: suggest some popular services
       const popular = await Service.find({ popular: true }).limit(5).select('name');
       const popularNames = popular.map(p => p.name).join(', ');
-      return res.json({ success: false, message: `Sorry, I couldn't find "${serviceName}". Popular services include: ${popularNames}. Please try the booking page.` , suggestions: popular.map(p=>p.name) });
+      return res.json({ success: false, message: `Sorry, I couldn't find "${serviceName}". Popular services include: ${popularNames}. Please try the booking page.`, suggestions: popular.map(p=>p.name), debug });
     }
 
     const bookingDate = parseBookingDate(dateText);
-    if (!bookingDate) return res.status(400).json({ success: false, message: 'Could not understand the requested date. Please provide a valid date.' });
+    if (!bookingDate) return res.status(400).json({ success: false, message: `Could not understand the requested date. Received: "${dateText}". Please provide a valid date.` });
     if (isPastDate(bookingDate)) return res.status(400).json({ success: false, message: 'Cannot book a past date. Please choose a future date.' });
 
     const TIME_SLOTS = ['09:00 AM','09:30 AM','10:00 AM','10:30 AM','11:00 AM','11:30 AM',
@@ -1117,10 +1292,12 @@ router.post('/chat-book', protect, moderatePrompt, async (req, res) => {
 
     let booking;
     try {
+      const isoDate = bookingDate.toISOString().slice(0,10);
+      console.log('Creating chat booking with ISO date:', isoDate);
       booking = await Booking.create({
         user: req.user._id,
         service: service._id,
-        date: bookingDate,
+        date: new Date(isoDate),
         timeSlot: matchedSlot,
         stylist: 'Any Available',
         totalAmount: service.price,
@@ -1211,40 +1388,156 @@ function getNextDay(dayIndex) {
 
 // Parse natural-ish date text into a normalized Date (midday) or return null
 function parseBookingDate(dateText) {
-  let bookingDate = new Date();
   const lower = (dateText || '').toLowerCase().trim();
-
+  console.log('parseBookingDate - Received date:', dateText);
   if (!lower || lower.length === 0) return null;
 
+  // handle natural language
+  if (lower.includes('today')) {
+    const d = new Date(); d.setHours(12,0,0,0); console.log('parseBookingDate - Parsed date:', d); return d;
+  }
   if (lower.includes('tomorrow')) {
-    bookingDate.setDate(bookingDate.getDate() + 1);
-  } else if (lower.includes('today')) {
-    bookingDate = new Date();
-  } else if (lower.includes('monday'))    { bookingDate = getNextDay(1); }
-  else if (lower.includes('tuesday'))     { bookingDate = getNextDay(2); }
-  else if (lower.includes('wednesday'))   { bookingDate = getNextDay(3); }
-  else if (lower.includes('thursday'))    { bookingDate = getNextDay(4); }
-  else if (lower.includes('friday'))      { bookingDate = getNextDay(5); }
-  else if (lower.includes('saturday'))    { bookingDate = getNextDay(6); }
-  else if (lower.includes('sunday'))      { bookingDate = getNextDay(0); }
-  else {
-    // Try parsing formatted date strings from frontend (D/M/YYYY, DD-MM-YYYY, etc)
-    const dateObj = new Date(dateText);
-    if (!isNaN(dateObj.getTime())) {
-      bookingDate = dateObj;
-    } else {
-      // Try a simple parse; if user gave '25 June' or 'June 25' etc.
-      const cleaned = (dateText || '').replace(/(st|nd|rd|th)/gi, '').trim();
-      // Attempt to parse with current year
-      const parsed = new Date(cleaned + ' ' + new Date().getFullYear());
-      if (!isNaN(parsed.getTime())) bookingDate = parsed;
-      else return null;
+    const d = new Date(); d.setDate(d.getDate()+1); d.setHours(12,0,0,0); console.log('parseBookingDate - Parsed date:', d); return d;
+  }
+
+  // next <weekday> handling
+  if (lower.includes('next')) {
+    const wk = lower.replace('next','').trim();
+    if (wk.includes('monday')) { const d = getNextDay(1); d.setHours(12,0,0,0); console.log('parseBookingDate - Parsed date:', d); return d; }
+    if (wk.includes('tuesday')) { const d = getNextDay(2); d.setHours(12,0,0,0); console.log('parseBookingDate - Parsed date:', d); return d; }
+    if (wk.includes('wednesday')) { const d = getNextDay(3); d.setHours(12,0,0,0); console.log('parseBookingDate - Parsed date:', d); return d; }
+    if (wk.includes('thursday')) { const d = getNextDay(4); d.setHours(12,0,0,0); console.log('parseBookingDate - Parsed date:', d); return d; }
+    if (wk.includes('friday')) { const d = getNextDay(5); d.setHours(12,0,0,0); console.log('parseBookingDate - Parsed date:', d); return d; }
+    if (wk.includes('saturday')) { const d = getNextDay(6); d.setHours(12,0,0,0); console.log('parseBookingDate - Parsed date:', d); return d; }
+    if (wk.includes('sunday')) { const d = getNextDay(0); d.setHours(12,0,0,0); console.log('parseBookingDate - Parsed date:', d); return d; }
+  }
+
+  // weekday names without 'next'
+  if (lower.includes('monday')) { const d = getNextDay(1); d.setHours(12,0,0,0); console.log('parseBookingDate - Parsed date:', d); return d; }
+  if (lower.includes('tuesday')) { const d = getNextDay(2); d.setHours(12,0,0,0); console.log('parseBookingDate - Parsed date:', d); return d; }
+  if (lower.includes('wednesday')) { const d = getNextDay(3); d.setHours(12,0,0,0); console.log('parseBookingDate - Parsed date:', d); return d; }
+  if (lower.includes('thursday')) { const d = getNextDay(4); d.setHours(12,0,0,0); console.log('parseBookingDate - Parsed date:', d); return d; }
+  if (lower.includes('friday')) { const d = getNextDay(5); d.setHours(12,0,0,0); console.log('parseBookingDate - Parsed date:', d); return d; }
+  if (lower.includes('saturday')) { const d = getNextDay(6); d.setHours(12,0,0,0); console.log('parseBookingDate - Parsed date:', d); return d; }
+  if (lower.includes('sunday')) { const d = getNextDay(0); d.setHours(12,0,0,0); console.log('parseBookingDate - Parsed date:', d); return d; }
+
+  // Try explicit numeric formats: D/M/YYYY or D-M-YYYY or DD/MM/YYYY
+  const numMatch = lower.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+  if (numMatch) {
+    let day = parseInt(numMatch[1],10);
+    let month = parseInt(numMatch[2],10) - 1;
+    let year = parseInt(numMatch[3],10);
+    if (year < 100) year += 2000;
+    const d = new Date(year, month, day);
+    if (!isNaN(d.getTime())) { d.setHours(12,0,0,0); console.log('parseBookingDate - Parsed date:', d); return d; }
+  }
+
+  // Try month name formats like '18 June 2026' or 'June 18 2026' or without year
+  const cleaned = (dateText || '').replace(/(st|nd|rd|th)/gi, '').trim();
+  const withYear = new Date(cleaned);
+  if (!isNaN(withYear.getTime())) { withYear.setHours(12,0,0,0); console.log('parseBookingDate - Parsed date:', withYear); return withYear; }
+
+  // Try appending current year if missing
+  const appended = new Date(cleaned + ' ' + new Date().getFullYear());
+  if (!isNaN(appended.getTime())) { appended.setHours(12,0,0,0); console.log('parseBookingDate - Parsed date:', appended); return appended; }
+
+  // Give up
+  console.log('parseBookingDate - Could not parse date:', dateText);
+  return null;
+}
+
+// Normalize text: lowercase, remove punctuation, collapse spaces
+function normalizeText(t) {
+  if (!t) return '';
+  return t.toLowerCase().replace(/[\p{P}$+<=>^`|~]/gu, ' ').replace(/\s+/g, ' ').trim();
+}
+
+// Simple Levenshtein distance for fuzzy matching
+function levenshtein(a, b) {
+  if (!a || !b) return Math.max(a?.length||0, b?.length||0);
+  const m = a.length, n = b.length;
+  const dp = Array.from({ length: m+1 }, () => new Array(n+1).fill(0));
+  for (let i=0;i<=m;i++) dp[i][0]=i;
+  for (let j=0;j<=n;j++) dp[0][j]=j;
+  for (let i=1;i<=m;i++){
+    for (let j=1;j<=n;j++){
+      const cost = a[i-1] === b[j-1] ? 0 : 1;
+      dp[i][j] = Math.min(dp[i-1][j]+1, dp[i][j-1]+1, dp[i-1][j-1]+cost);
+    }
+  }
+  return dp[m][n];
+}
+
+// Extract probable service phrase from a conversational transcript
+function extractServicePhrase(transcript) {
+  if (!transcript) return '';
+  const filler = ['i', 'would', 'like', 'to', 'book', 'a', 'an', 'please', 'can', 'could', 'want', 'need', 'for', 'today', 'tomorrow', 'on', 'at', 'need', 'bookings', 'booking', 'appointment', 'appointments', 'my', 'help'];
+  let norm = normalizeText(transcript);
+  // remove filler words
+  const tokens = norm.split(' ').filter(t => t && !filler.includes(t));
+  // try to return contiguous n-grams from end to beginning (longer first)
+  for (let len = Math.min(4, tokens.length); len >= 1; len--) {
+    for (let start = 0; start + len <= tokens.length; start++) {
+      const phrase = tokens.slice(start, start+len).join(' ');
+      if (phrase.length > 1) return phrase;
+    }
+  }
+  return tokens.join(' ');
+}
+
+// Given a transcript and list of Service docs, return best match and debug info
+async function matchServiceFromTranscript(transcript, services) {
+  const debug = {};
+  debug.transcript = transcript;
+  const extracted = extractServicePhrase(transcript);
+  debug.extractedService = extracted;
+  debug.availableServices = services.map(s => s.name);
+
+  const normExtract = normalizeText(extracted);
+  // 1) exact includes (best)
+  for (const s of services) {
+    const n = normalizeText(s.name);
+    if (n === normExtract || n.includes(normExtract) || normExtract.includes(n)) {
+      debug.matchedService = s.name;
+      debug.reason = 'exact_include';
+      return { service: s, debug };
     }
   }
 
-  // normalize to midday to avoid timezone/daylight issues
-  bookingDate.setHours(12, 0, 0, 0);
-  return bookingDate;
+  // 2) token overlap: count shared tokens
+  const exTokens = new Set(normExtract.split(' ').filter(Boolean));
+  let best = null; let bestScore = 0;
+  for (const s of services) {
+    const stoks = normalizeText(s.name).split(' ').filter(Boolean);
+    let score = 0;
+    for (const t of stoks) if (exTokens.has(t)) score++;
+    if (score > bestScore) { bestScore = score; best = s; }
+  }
+  if (best && bestScore > 0) {
+    debug.matchedService = best.name;
+    debug.reason = 'token_overlap';
+    debug.score = bestScore;
+    return { service: best, debug };
+  }
+
+  // 3) fuzzy Levenshtein distance normalized by length
+  let bestLev = null; let bestLevScore = Infinity;
+  for (const s of services) {
+    const n = normalizeText(s.name);
+    const lev = levenshtein(n, normExtract);
+    const norm = lev / Math.max(n.length, normExtract.length, 1);
+    if (norm < bestLevScore) { bestLevScore = norm; bestLev = s; }
+  }
+  if (bestLev && bestLevScore <= 0.45) {
+    debug.matchedService = bestLev.name;
+    debug.reason = 'levenshtein';
+    debug.levenshteinNorm = bestLevScore;
+    return { service: bestLev, debug };
+  }
+
+  debug.matchedService = null;
+  debug.reason = 'no_match';
+  return { service: null, debug };
 }
 
 // Check whether a booking date (Date object) is in the past (relative to local date)
