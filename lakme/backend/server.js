@@ -15,6 +15,7 @@ const app = express();
 // Middleware
 app.use(cors({
   origin: (origin, cb) => {
+    console.log('Incoming Origin:', origin);
     // allow requests with no origin (e.g. curl, server-to-server)
     if (!origin) return cb(null, true);
     const allowed = [
@@ -32,6 +33,8 @@ app.use(cors({
   preflightContinue: false,
   optionsSuccessStatus: 204
 }));
+// Ensure OPTIONS preflight requests are handled for all routes
+app.options('*', cors());
 app.use((req, res, next) => {
   console.log("Origin:", req.headers.origin);
   next();
