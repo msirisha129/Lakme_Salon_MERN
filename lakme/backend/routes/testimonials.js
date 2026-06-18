@@ -15,7 +15,8 @@ router.get('/', getTestimonials);
 router.post('/', protect, createTestimonial);
 
 // Admin controls: update (including approve) and delete
-router.put('/:id', protect, adminOnly, updateTestimonial);
-router.delete('/:id', protect, adminOnly, deleteTestimonial);
+// Allow owners to edit/delete their own reviews; admin can edit/delete any
+router.put('/:id', protect, updateTestimonial);
+router.delete('/:id', protect, deleteTestimonial);
 
 module.exports = router;

@@ -34,25 +34,52 @@ export default function Home({ onOpenChat }) {
   ];
 
   const [testimonials, setTestimonials] = useState([]);
+  // original hardcoded testimonials preserved
+  const hardcodedTestimonials = [
+    { name: 'Ananya R.', service: 'Signature Haircut', rating: 5, text: 'Absolutely loved my haircut! The stylist understood exactly what I wanted and delivered.', imageUrl: '' },
+    { name: 'Priya M.', service: 'Hydrafacial', rating: 5, text: 'My skin has never felt better. Gentle, professional and effective treatment.', imageUrl: '' },
+    { name: 'Sonal K.', service: 'Bridal Makeup', rating: 5, text: 'Flawless bridal look — the team made my big day perfect.', imageUrl: '' }
+  ];
 
   useEffect(() => {
     let mounted = true;
     API.get('/testimonials?approved=true')
       .then(res => {
         if (!mounted) return;
-        setTestimonials((res.data || []).map(t => ({
+        const fromDb = (res.data || []).map(t => ({
           name: t.name,
           service: t.service,
           rating: t.rating || 5,
           text: t.text,
           imageUrl: t.imageUrl,
-        })));
+        }));
+        setTestimonials([...hardcodedTestimonials, ...fromDb]);
       })
       .catch(() => {
-        // keep empty array on error
+        // fallback to hardcoded only
+        if (mounted) setTestimonials(hardcodedTestimonials);
       });
     return () => { mounted = false; };
   }, []);
+
+  // Review form state
+  const [showReviewForm, setShowReviewForm] = useState(false);
+  const [reviewForm, setReviewForm] = useState({ name: '', service: '', rating: 5, text: '' });
+  const { user } = require('../context/AuthContext').useAuth ? require('../context/AuthContext').useAuth() : { user: null };
+
+  const submitReview = async () => {
+    try {
+      await API.post('/testimonials', reviewForm);
+      setShowReviewForm(false);
+      // refresh testimonials (only DB ones) — keep hardcoded preserved by useEffect on reload
+      const res = await API.get('/testimonials?approved=true');
+      const fromDb = (res.data || []).map(t => ({ name: t.name, service: t.service, rating: t.rating || 5, text: t.text, imageUrl: t.imageUrl }));
+      setTestimonials([...hardcodedTestimonials, ...fromDb]);
+    } catch (err) {
+      console.error('Failed to submit review', err);
+      alert(err.message || 'Failed to submit review');
+    }
+  };
 
   // ── Service card config: image URL + accent colors per category ──────────
   const serviceImageMap = {
@@ -384,6 +411,31 @@ export default function Home({ onOpenChat }) {
             <h2>What They Say</h2>
             <div className="gold-line" />
           </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+            <div />
+            <div>
+              {user ? (
+                <button className="btn-primary" onClick={() => setShowReviewForm(s => !s)}>{showReviewForm ? 'Close' : 'Write a Review'}</button>
+              ) : (
+                <Link to="/login" className="btn-outline">Log in to review</Link>
+              )}
+            </div>
+          </div>
+
+          {showReviewForm && (
+            <div style={{ marginBottom: 20, background: 'white', padding: 16, borderRadius: 8 }}>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input className="form-input" placeholder="Your name" value={reviewForm.name} onChange={e => setReviewForm({ ...reviewForm, name: e.target.value })} />
+                <input className="form-input" placeholder="Service" value={reviewForm.service} onChange={e => setReviewForm({ ...reviewForm, service: e.target.value })} />
+                <input type="number" min={1} max={5} className="form-input" style={{ width: 100 }} value={reviewForm.rating} onChange={e => setReviewForm({ ...reviewForm, rating: Number(e.target.value) })} />
+              </div>
+              <textarea className="form-input" placeholder="Your review" value={reviewForm.text} onChange={e => setReviewForm({ ...reviewForm, text: e.target.value })} style={{ marginTop: 8 }} />
+              <div style={{ marginTop: 8 }}>
+                <button className="btn-primary" onClick={submitReview}>Submit Review</button>
+              </div>
+            </div>
+          )}
+
           <div className="grid-3">
             {testimonials.map((t, i) => (
               <div key={i} style={{ background: 'white', borderRadius: 12, padding: '32px', border: '1px solid var(--border-light)', position: 'relative', transition: 'transform 0.3s, box-shadow 0.3s' }}

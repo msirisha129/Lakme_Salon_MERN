@@ -481,6 +481,16 @@ const downloadLogs = (type) => {
             </div>
           </div>
         )}
+
+        {/* TESTIMONIALS */}
+        {tab === 'Testimonials' && (
+          <div>
+            <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.4rem', marginBottom: 20 }}>Testimonials</h3>
+            <div style={{ background: 'transparent' }}>
+              <AdminTestimonials />
+            </div>
+          </div>
+        )}
         {/* LOGS */}
         {tab === 'Logs' && (
           <div>

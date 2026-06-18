@@ -20,6 +20,7 @@ export default function AdminTestimonials() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(null);
   const [showPendingOnly, setShowPendingOnly] = useState(false);
+  const [counts, setCounts] = useState({ total: 0, pending: 0 });
 
   const fetch = () => {
     setLoading(true);
@@ -27,7 +28,16 @@ export default function AdminTestimonials() {
     API.get(path).then(r => { setItems(r.data || []); setLoading(false); }).catch(() => setLoading(false));
   };
 
+  const fetchCounts = async () => {
+    try {
+      const all = await API.get('/testimonials');
+      const arr = all.data || [];
+      setCounts({ total: arr.length, pending: arr.filter(x => !x.approved).length });
+    } catch (e) { setCounts({ total: 0, pending: 0 }); }
+  };
+
   useEffect(() => { fetch(); }, [showPendingOnly]);
+  useEffect(() => { fetchCounts(); }, []);
 
   const handleDelete = async (id) => {
     if (!window.confirm('Delete this testimonial?')) return;
@@ -63,12 +73,48 @@ export default function AdminTestimonials() {
         </label>
       </div>
 
+      <div style={{ marginBottom: 12, display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div style={{ fontWeight: 700 }}>Total: {counts.total} • Pending: {counts.pending}</div>
+        <div style={{ flex: 1 }} />
+        <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <input type="checkbox" checked={showPendingOnly} onChange={e => setShowPendingOnly(e.target.checked)} />
+          Show pending only
+        </label>
+      </div>
+
       {loading ? <div>Loading…</div> : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
-          {items.map(i => (
-            <TestimonialCard key={i._id} t={i} onEdit={(t) => setEditing(t)} onDelete={handleDelete} />
-          ))}
-        </div>
+        items.length === 0 ? (
+          <div style={{ padding: 36, textAlign: 'center', background: 'white', borderRadius: 8 }}>
+            <h3>No reviews yet</h3>
+            <p>There are currently no testimonials. Encourage customers to leave reviews.</p>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12 }}>
+            {items.map(i => (
+              <div key={i._id} style={{ border: '1px solid var(--border-light)', padding: 12, borderRadius: 8, background: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontWeight: 700 }}>{i.name} <span style={{ color: 'var(--gold)', marginLeft: 8 }}>{i.service}</span></div>
+                  <div style={{ color: '#666', marginTop: 6 }}>{(new Date(i.createdAt)).toLocaleString()}</div>
+                  <div style={{ marginTop: 8 }}>{i.text}</div>
+                </div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontWeight: 700 }}>{i.rating}</div>
+                    <div style={{ fontSize: 12, color: '#666' }}>Rating</div>
+                  </div>
+                  <div style={{ minWidth: 120 }}>
+                    <div style={{ marginBottom: 8, fontSize: 13 }}>Status: {i.approved ? 'Approved' : 'Pending'}</div>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button className="btn-outline" onClick={() => setEditing(i)}>View / Edit</button>
+                      {!i.approved && <button className="btn-primary" onClick={async () => { await API.put(`/testimonials/${i._id}`, { approved: true }); fetch(); fetchCounts(); }}>Approve</button>}
+                      <button className="btn-primary" onClick={async () => { if (window.confirm('Delete this review?')) { await API.delete(`/testimonials/${i._id}`); fetch(); fetchCounts(); } }}>Delete</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )
       )}
     </div>
   );
