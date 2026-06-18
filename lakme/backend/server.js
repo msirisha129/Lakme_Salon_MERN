@@ -13,12 +13,7 @@ dotenv.config();
 const app = express();
 
 // Middleware
-app.use(cors({
-  origin: (origin, cb) => {
-    console.log('Incoming Origin:', origin);
-    // allow requests with no origin (e.g. curl, server-to-server)
-    if (!origin) return cb(null, true);
-   const allowed = [
+const allowed = [
   'https://lakme-frontend.onrender.com',
   'https://lakme-salon.onrender.com',
   'http://localhost:3000',
@@ -26,17 +21,23 @@ app.use(cors({
 ];
 
 app.use(cors({
-  origin: function(origin, callback) {
-    if (!origin) return callback(null, true);
-
-    if (allowed.includes(origin))
-      return callback(null, true);
-
-    return callback(new Error('Not allowed by CORS'));
+  origin: (origin, cb) => {
+    console.log('Incoming Origin:', origin);
+    // allow requests with no origin (e.g. curl, server-to-server)
+    if (!origin) return cb(null, true);
+    if (allowed.indexOf(origin) !== -1) return cb(null, true);
+    // allow Render-hosted variants that include the app name as a subdomain
+    if (origin && origin.indexOf('lakme-frontend.onrender.com') !== -1) return cb(null, true);
+    return cb(new Error('CORS not allowed'));
   },
-  credentials: true
+  methods: ['GET','HEAD','PUT','PATCH','POST','DELETE','OPTIONS'],
+  allowedHeaders: ['Content-Type','Authorization','X-Requested-With'],
+  credentials: true,
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 }));
 // Ensure OPTIONS preflight requests are handled for all routes
+app.options('*', cors());
 
 app.use((req, res, next) => {
   console.log("Origin:", req.headers.origin);
