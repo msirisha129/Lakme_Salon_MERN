@@ -1433,13 +1433,23 @@ function parseBookingDate(dateText) {
   }
 
   // Try month name formats like '18 June 2026' or 'June 18 2026' or without year
-  const cleaned = (dateText || '').replace(/(st|nd|rd|th)/gi, '').trim();
-  const withYear = new Date(cleaned);
-  if (!isNaN(withYear.getTime())) { withYear.setHours(12,0,0,0); console.log('parseBookingDate - Parsed date:', withYear); return withYear; }
+const cleaned = (dateText || '').replace(/(st|nd|rd|th)/gi, '').trim();
+const currentYear = new Date().getFullYear();
 
-  // Try appending current year if missing
-  const appended = new Date(cleaned + ' ' + new Date().getFullYear());
-  if (!isNaN(appended.getTime())) { appended.setHours(12,0,0,0); console.log('parseBookingDate - Parsed date:', appended); return appended; }
+// Try appending current year FIRST (prevents defaulting to 2001)
+const appended = new Date(cleaned + ' ' + currentYear);
+if (!isNaN(appended.getTime())) {
+  // If still in past, use next year
+  const today = new Date(); today.setHours(0,0,0,0);
+  if (appended < today) appended.setFullYear(currentYear + 1);
+  appended.setHours(12,0,0,0);
+  console.log('parseBookingDate - Parsed date:', appended);
+  return appended;
+}
+
+// Only try without year if above failed
+const withYear = new Date(cleaned);
+if (!isNaN(withYear.getTime())) { withYear.setHours(12,0,0,0); console.log('parseBookingDate - Parsed date:', withYear); return withYear; }
 
   // Give up
   console.log('parseBookingDate - Could not parse date:', dateText);
