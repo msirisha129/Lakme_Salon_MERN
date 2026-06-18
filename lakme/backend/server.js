@@ -75,6 +75,9 @@ app.get('/test123', (req, res) => {
 });
 // Health check
 app.get('/api/health', (req, res) => res.json({ status: 'OK', message: 'Lakme API running' }));
+app.get('/deploy-check', (req, res) => {
+  res.send('DEPLOY_CHECK_V2');
+});
 
 // metrics error handler: log unhandled server errors
 const metrics = require('./middleware/metrics');
