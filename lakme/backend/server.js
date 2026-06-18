@@ -13,7 +13,7 @@ dotenv.config();
 const app = express();
 
 // Middleware
-const allowed = [
+const allowedOrigins = [
   'https://lakme-frontend.onrender.com',
   'https://lakme-salon.onrender.com',
   'http://localhost:3000',
@@ -21,23 +21,23 @@ const allowed = [
 ];
 
 app.use(cors({
-  origin: (origin, cb) => {
+  origin: function(origin, callback) {
     console.log('Incoming Origin:', origin);
-    // allow requests with no origin (e.g. curl, server-to-server)
-    if (!origin) return cb(null, true);
-    if (allowed.indexOf(origin) !== -1) return cb(null, true);
-    // allow Render-hosted variants that include the app name as a subdomain
-    if (origin && origin.indexOf('lakme-frontend.onrender.com') !== -1) return cb(null, true);
-    return cb(new Error('CORS not allowed'));
+
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    return callback(new Error('Not allowed by CORS'));
   },
-  methods: ['GET','HEAD','PUT','PATCH','POST','DELETE','OPTIONS'],
-  allowedHeaders: ['Content-Type','Authorization','X-Requested-With'],
   credentials: true,
-  preflightContinue: false,
-  optionsSuccessStatus: 204
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
-// Ensure OPTIONS preflight requests are handled for all routes
-app.options('*', cors());
+
+
 
 app.use((req, res, next) => {
   console.log("Origin:", req.headers.origin);
