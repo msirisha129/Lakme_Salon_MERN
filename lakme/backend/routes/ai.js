@@ -320,7 +320,7 @@ router.get('/voice-access', async (req, res) => {
 });
 
 // Image analysis endpoint for hairstyle suggestions
-router.post('/analyze-image', checkPlan('Growth'), upload.single('image'), async (req, res) => {
+router.post('/analyze-image', checkPlan('Starter'), upload.single('image'), async (req, res) => {
   logger.info('app', 'Image Analysis API call received.', { preferences: req.body.preferences, concerns: req.body.concerns });
 
   try {
