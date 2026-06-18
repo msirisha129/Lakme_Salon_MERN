@@ -4,8 +4,9 @@ import API from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import AdminTestimonials from './AdminTestimonials';
 
-const TABS = ['Dashboard', 'Bookings', 'Services', 'Logs', 'Analytics', 'Billing'];
+const TABS = ['Dashboard', 'Bookings', 'Services', 'Testimonials', 'Logs', 'Analytics', 'Billing'];
 const CATS = ['Hair', 'Skin', 'Nails', 'Bridal', 'Makeup', 'Spa'];
 
 export default function Admin() {

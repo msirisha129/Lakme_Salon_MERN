@@ -33,11 +33,26 @@ export default function Home({ onOpenChat }) {
       img: 'https://images.unsplash.com/photo-1544161515-4ab6ce6db874?w=600&q=85' },
   ];
 
-  const testimonials = [
-    { name: 'Priya Sharma', service: 'Bridal Package', rating: 5, text: 'My wedding day look was absolutely stunning. The team understood my vision perfectly and delivered beyond expectations.' },
-    { name: 'Ananya Reddy', service: 'Hydrafacial', rating: 5, text: "The Korean Glass Skin treatment gave me the most radiant complexion I've ever had. I keep getting compliments!" },
-    { name: 'Divya Menon', service: 'Balayage', rating: 5, text: 'The balayage looks so natural and beautiful. Exactly the sun-kissed look I wanted. Worth every penny!' },
-  ];
+  const [testimonials, setTestimonials] = useState([]);
+
+  useEffect(() => {
+    let mounted = true;
+    API.get('/testimonials?approved=true')
+      .then(res => {
+        if (!mounted) return;
+        setTestimonials((res.data || []).map(t => ({
+          name: t.name,
+          service: t.service,
+          rating: t.rating || 5,
+          text: t.text,
+          imageUrl: t.imageUrl,
+        })));
+      })
+      .catch(() => {
+        // keep empty array on error
+      });
+    return () => { mounted = false; };
+  }, []);
 
   // ── Service card config: image URL + accent colors per category ──────────
   const serviceImageMap = {

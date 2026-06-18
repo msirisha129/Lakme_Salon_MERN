@@ -69,6 +69,8 @@ app.use('/api/contact', require('./routes/contact'));
 app.use('/api/ai', require('./routes/ai'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/billing', require('./routes/billing'));
+// Testimonials
+app.use('/api/testimonials', require('./routes/testimonials'));
 
 app.get('/test123', (req, res) => {
   res.send('SIRISHA_TEST');
