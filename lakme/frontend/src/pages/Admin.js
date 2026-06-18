@@ -17,7 +17,8 @@ export default function Admin() {
   const [services, setServices] = useState([]);
   const [editService, setEditService] = useState(null);
   const [newService, setNewService] = useState(false);
-  const [sForm, setSForm] = useState({ name: '', category: 'Hair', description: '', price: '', duration: '', popular: false });
+  const [sForm, setSForm] = useState({ name: '', category: 'Hair', description: '', price: '', duration: '', popular: false, image: '' });
+  const [sImage, setSImage] = useState(null);
   const [loading, setLoading] = useState(false);
   const [logTab, setLogTab] = useState('booking');
   const [voiceStats, setVoiceStats] = useState({});
@@ -52,18 +53,27 @@ export default function Admin() {
   const saveService = async () => {
     setLoading(true);
     try {
+      let imageUrl = sForm.image || '';
+      if (sImage) {
+        const formData = new FormData();
+        formData.append('image', sImage);
+        const { data: imgData } = await API.post('/services/upload-image', formData);
+        imageUrl = imgData.url;
+      }
+      const payload = { ...sForm, image: imageUrl };
       if (editService) {
-        const { data } = await API.put(`/services/${editService._id}`, sForm);
+        const { data } = await API.put(`/services/${editService._id}`, payload);
         setServices(s => s.map(x => x._id === editService._id ? data.data : x));
         toast.success('Service updated ✅');
         setEditService(null);
       } else {
-        const { data } = await API.post('/services', sForm);
+        const { data } = await API.post('/services', payload);
         setServices(s => [...s, data.data]);
         toast.success('Service created ✅');
         setNewService(false);
       }
-      setSForm({ name: '', category: 'Hair', description: '', price: '', duration: '', popular: false });
+      setSForm({ name: '', category: 'Hair', description: '', price: '', duration: '', popular: false, image: '' });
+      setSImage(null);
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed');
     } finally {
@@ -406,6 +416,21 @@ const downloadLogs = (type) => {
                   <label className="form-label">Description</label>
                   <textarea className="form-input" rows={2} value={sForm.description} onChange={e => setSForm(f => ({ ...f, description: e.target.value }))} style={{ resize: 'none' }} />
                 </div>
+                <div className="form-group">
+                  <label className="form-label">Service Image</label>
+                  {(sForm.image || editService?.image) && (
+                    <div style={{ marginBottom: 8 }}>
+                      <img src={sForm.image || editService?.image} alt="service" 
+                        style={{ width: 80, height: 80, objectFit: 'cover', borderRadius: 8, marginRight: 8 }} />
+                      <button type="button" onClick={() => setSForm(f => ({ ...f, image: '' }))} 
+                        style={{ fontSize: 11, color: 'red', background: 'none', border: 'none', cursor: 'pointer' }}>
+                        Remove Image
+                      </button>
+                    </div>
+                  )}
+                  <input type="file" accept="image/*" onChange={e => setSImage(e.target.files[0])} 
+                    style={{ fontSize: 13 }} />
+                </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
                   <input type="checkbox" id="popular" checked={sForm.popular} onChange={e => setSForm(f => ({ ...f, popular: e.target.checked }))} />
                   <label htmlFor="popular" style={{ fontSize: 13, cursor: 'pointer' }}>Mark as Popular</label>
@@ -429,9 +454,14 @@ const downloadLogs = (type) => {
                 <tbody>
                   {services.map(s => (
                     <tr key={s._id} style={{ borderTop: '1px solid var(--border-light)' }}>
-                      <td style={{ padding: '12px 16px' }}>
-                        <div style={{ fontSize: 13, fontWeight: 500 }}>{s.name}</div>
-                        <div style={{ fontSize: 11, color: 'var(--text-muted)', maxWidth: 200 }}>{s.description?.slice(0, 50)}...</div>
+                      <td style={{ padding: '12px 16px', display: 'flex', alignItems: 'center' }}>
+                        <img src={s.image} alt={s.name} 
+                          style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 6, marginRight: 8, verticalAlign: 'middle' }} 
+                          onError={e => e.target.style.display='none'} />
+                        <div>
+                          <div style={{ fontSize: 13, fontWeight: 500 }}>{s.name}</div>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)', maxWidth: 200 }}>{s.description?.slice(0, 50)}...</div>
+                        </div>
                       </td>
                       <td style={{ padding: '12px 16px' }}><span className="badge badge-gold">{s.category}</span></td>
                       <td style={{ padding: '12px 16px', fontFamily: 'var(--font-display)', color: 'var(--gold)', fontSize: '1.1rem' }}>₹{s.price?.toLocaleString()}</td>
