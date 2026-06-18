@@ -75,6 +75,10 @@ const sendBookingStatusEmail = async ({ toEmail, toName, status, serviceName, bo
   const cfg = statusConfig[status] || statusConfig.pending;
 
   try {
+    const buttonUrl = (status === 'completed' || status === 'cancelled')
+      ? `${process.env.FRONTEND_URL || ''}/booking`
+      : `${process.env.FRONTEND_URL || ''}/dashboard`;
+
     const response = await fetch('https://api.brevo.com/v3/smtp/email', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'api-key': process.env.BREVO_API_KEY },
@@ -130,7 +134,7 @@ const sendBookingStatusEmail = async ({ toEmail, toName, status, serviceName, bo
             </tr>
             <tr>
               <td style="background:#ffffff;padding:0 36px 28px;text-align:center;">
-                <a href="#" style="display:inline-block;background:#c9a84c;color:#1a1612;text-decoration:none;font-size:13px;font-weight:bold;letter-spacing:1px;padding:14px 32px;border-radius:3px;">
+                <a href="${buttonUrl}" style="display:inline-block;background:#c9a84c;color:#1a1612;text-decoration:none;font-size:13px;font-weight:bold;letter-spacing:1px;padding:14px 32px;border-radius:3px;">
                   ${cfg.buttonLabel}
                 </a>
               </td>

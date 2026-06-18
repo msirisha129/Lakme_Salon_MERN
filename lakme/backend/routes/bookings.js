@@ -142,11 +142,26 @@ router.get('/my', protect, async (req, res) => {
 // Cancel booking
 router.put('/:id/cancel', protect, async (req, res) => {
   try {
-    const booking = await Booking.findOne({ _id: req.params.id, user: req.user._id });
+    let booking = await Booking.findOne({ _id: req.params.id, user: req.user._id }).populate('user service');
     if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
     booking.status = 'cancelled';
     await booking.save();
     await logger.info('booking', `Booking cancelled by user ${req.user._id}`, { bookingId: booking._id });
+
+    // send cancellation email to user
+    if (booking.user?.email) {
+      await sendBookingStatusEmail({
+        toEmail: booking.user.email,
+        toName: booking.user.name || 'Customer',
+        status: 'cancelled',
+        serviceName: booking.service?.name || (booking.serviceName || 'Service'),
+        bookingDate: new Date(booking.date).toDateString(),
+        bookingTime: booking.time || booking.timeSlot || '',
+        amount: booking.totalAmount,
+        bookingId: booking._id
+      });
+    }
+
     res.json({ success: true, message: 'Booking cancelled' });
   } catch (err) {
     await logger.error('booking', `Booking cancellation failed: ${err.message}`, { bookingId: req.params.id });
@@ -197,7 +212,9 @@ router.put('/:id/status', protect, adminOnly, async (req, res) => {
         status: req.body.status,
         serviceName: booking.service?.name || 'Service',
         bookingDate: new Date(booking.date).toDateString(),
-        bookingTime: booking.time || ''
+          bookingTime: booking.time || '',
+          amount: booking.totalAmount,
+          bookingId: booking._id
       });
     }
 
