@@ -18,20 +18,23 @@ app.use(cors({
     console.log('Incoming Origin:', origin);
     // allow requests with no origin (e.g. curl, server-to-server)
     if (!origin) return cb(null, true);
-    const allowed = [
-      'https://lakme-frontend.onrender.com',
-      'https://lakme-salon.onrender.com',
-      'http://localhost:3000',
-      'http://localhost:5173'
-    ];
-    if (allowed.indexOf(origin) !== -1) return cb(null, true);
-    return cb(new Error('CORS not allowed'));
+   const allowed = [
+  'https://lakme-frontend.onrender.com',
+  'https://lakme-salon.onrender.com',
+  'http://localhost:3000',
+  'http://localhost:5173'
+];
+
+app.use(cors({
+  origin: function(origin, callback) {
+    if (!origin) return callback(null, true);
+
+    if (allowed.includes(origin))
+      return callback(null, true);
+
+    return callback(new Error('Not allowed by CORS'));
   },
-  methods: ['GET','HEAD','PUT','PATCH','POST','DELETE','OPTIONS'],
-  allowedHeaders: ['Content-Type','Authorization','X-Requested-With'],
-  credentials: true,
-  preflightContinue: false,
-  optionsSuccessStatus: 204
+  credentials: true
 }));
 // Ensure OPTIONS preflight requests are handled for all routes
 
