@@ -34,7 +34,7 @@ app.use(cors({
   optionsSuccessStatus: 204
 }));
 // Ensure OPTIONS preflight requests are handled for all routes
-app.options('*', cors());
+
 app.use((req, res, next) => {
   console.log("Origin:", req.headers.origin);
   next();
