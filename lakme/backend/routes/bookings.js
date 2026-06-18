@@ -6,6 +6,7 @@ const User = require('../models/User');
 const { protect, adminOnly } = require('../middleware/auth');
 const { consumeUserLimit } = require('../middleware/bookingRateLimiter');
 const logger = require('../utils/logger');
+const { sendBookingStatusEmail } = require('../utils/otpEmailService');
 
 const TIME_SLOTS = ['09:00 AM','09:30 AM','10:00 AM','10:30 AM','11:00 AM','11:30 AM',
   '12:00 PM','12:30 PM','01:00 PM','02:00 PM','02:30 PM','03:00 PM',
@@ -188,6 +189,18 @@ router.put('/:id/status', protect, adminOnly, async (req, res) => {
     const booking = await Booking.findByIdAndUpdate(
       req.params.id, { status: req.body.status }, { new: true }
     ).populate('user service');
+
+    if (booking.user?.email) {
+      await sendBookingStatusEmail({
+        toEmail: booking.user.email,
+        toName: booking.user.name || 'Customer',
+        status: req.body.status,
+        serviceName: booking.service?.name || 'Service',
+        bookingDate: new Date(booking.date).toDateString(),
+        bookingTime: booking.time || ''
+      });
+    }
+
     res.json({ success: true, data: booking });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

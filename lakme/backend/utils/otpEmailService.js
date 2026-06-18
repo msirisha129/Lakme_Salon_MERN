@@ -36,4 +36,40 @@ const sendOtpEmail = async ({ toEmail, toName, otp }) => {
   }
 };
 
-module.exports = { sendOtpEmail };
+const sendBookingStatusEmail = async ({ toEmail, toName, status, serviceName, bookingDate, bookingTime }) => {
+  const statusMessages = {
+    confirmed: { emoji: '✅', text: 'Your appointment has been confirmed!', color: '#28a745' },
+    completed: { emoji: '🌟', text: 'Your appointment is completed!', color: '#C9A84C' },
+    cancelled: { emoji: '❌', text: 'Your appointment has been cancelled.', color: '#dc3545' },
+    pending:   { emoji: '⏳', text: 'Your appointment is pending confirmation.', color: '#ffc107' }
+  };
+  const s = statusMessages[status] || statusMessages.pending;
+  try {
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'api-key': process.env.BREVO_API_KEY },
+      body: JSON.stringify({
+        sender: { name: 'Lakmé Salon', email: process.env.EMAIL_FROM },
+        to: [{ email: toEmail, name: toName }],
+        subject: `${s.emoji} Booking ${status} - Lakmé Salon`,
+        htmlContent: `<div style="font-family:Arial;max-width:500px;margin:auto;padding:20px">
+          <h2 style="color:#C9A84C">Lakmé Salon</h2>
+          <h3 style="color:${s.color}">${s.emoji} ${s.text}</h3>
+          <p>Hi ${toName},</p>
+          <p><strong>Service:</strong> ${serviceName}</p>
+          <p><strong>Date:</strong> ${bookingDate}</p>
+          <p><strong>Time:</strong> ${bookingTime}</p>
+          <hr/>
+          <p style="color:#999">Lakmé Salon | hello@lakmesalon.com</p>
+        </div>`
+      })
+    });
+    if (!response.ok) throw new Error(JSON.stringify(await response.json()));
+    return true;
+  } catch (error) {
+    logger.error('email', `Failed to send status email: ${error.message}`);
+    return false;
+  }
+};
+
+module.exports = { sendOtpEmail, sendBookingStatusEmail };
