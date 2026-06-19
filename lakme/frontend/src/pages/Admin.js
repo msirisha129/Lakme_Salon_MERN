@@ -229,6 +229,7 @@ const downloadLogs = (type) => {
   const S_COLORS = { confirmed: '#4A90D9', pending: '#F5A623', completed: '#0F9B58', cancelled: '#C8003B' };
 
   return (
+    <>
     <div style={{ paddingTop: 72, minHeight: '100vh', background: 'var(--cream)' }}>
       <div style={{ background: 'linear-gradient(135deg, #0A0A0A, #1A1A3E)', padding: '40px 0' }}>
         <div className="container">
@@ -615,7 +616,7 @@ const downloadLogs = (type) => {
       </div>
     </div>
       {reasonModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
           <div style={{ background: 'white', borderRadius: 16, padding: '32px', width: '100%', maxWidth: 420 }}>
             <h4 style={{ fontFamily: 'var(--font-display)', marginBottom: 8 }}>
               Change status to "{reasonModal.status}"
@@ -643,5 +644,6 @@ const downloadLogs = (type) => {
           </div>
         </div>
       )}
-    );
+    </>
+  );
 }
