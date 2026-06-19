@@ -46,8 +46,10 @@ export default function Admin() {
   };
 
   const updateBookingStatus = async (id, status) => {
-    await API.put(`/bookings/${id}/status`, { status });
-    setBookings(b => b.map(x => x._id === id ? { ...x, status } : x));
+    const reason = window.prompt(`Reason for changing status to "${status}" (optional):`, '');
+    if (reason === null) return; // admin clicked cancel on the prompt
+    await API.put(`/bookings/${id}/status`, { status, statusReason: reason });
+    setBookings(b => b.map(x => x._id === id ? { ...x, status, statusReason: reason } : x));
     toast.success('Status updated');
   };
 

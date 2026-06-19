@@ -202,7 +202,9 @@ router.get('/admin/all', protect, adminOnly, async (req, res) => {
 router.put('/:id/status', protect, adminOnly, async (req, res) => {
   try {
     const booking = await Booking.findByIdAndUpdate(
-      req.params.id, { status: req.body.status }, { new: true }
+      req.params.id, 
+      { status: req.body.status, statusReason: req.body.statusReason || '' }, 
+      { new: true }
     ).populate('user service');
 
     if (booking.user?.email) {
@@ -214,7 +216,8 @@ router.put('/:id/status', protect, adminOnly, async (req, res) => {
         bookingDate: new Date(booking.date).toDateString(),
           bookingTime: booking.time || '',
           amount: booking.totalAmount,
-          bookingId: booking._id
+          bookingId: booking._id,
+          statusReason: booking.statusReason
       });
     }
 

@@ -16,6 +16,7 @@ const bookingSchema = new mongoose.Schema({
     default: 'pending'
   },
   notes: { type: String, default: '' },
+  statusReason: { type: String, default: '' },
   totalAmount: { type: Number },
   feedback: {
     rating: { type: Number, min: 1, max: 5 },

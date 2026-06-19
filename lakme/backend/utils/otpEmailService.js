@@ -36,7 +36,7 @@ const sendOtpEmail = async ({ toEmail, toName, otp }) => {
   }
 };
 
-const sendBookingStatusEmail = async ({ toEmail, toName, status, serviceName, bookingDate, bookingTime, amount, bookingId, serviceId }) => {
+const sendBookingStatusEmail = async ({ toEmail, toName, status, serviceName, bookingDate, bookingTime, amount, bookingId, statusReason, serviceId }) => {
   const statusConfig = {
     confirmed: {
       bannerBg: '#C9A84C',
@@ -79,7 +79,7 @@ const sendBookingStatusEmail = async ({ toEmail, toName, status, serviceName, bo
       ? `${process.env.FRONTEND_URL || ''}/booking`
       : `${process.env.FRONTEND_URL || ''}/dashboard`;
 
-    const reviewUrl = `${process.env.FRONTEND_URL || ''}/review/${bookingId}`;
+    const reviewUrl = `${process.env.FRONTEND_URL || ''}/dashboard?rate=${bookingId}`;
 
     const response = await fetch('https://api.brevo.com/v3/smtp/email', {
       method: 'POST',
@@ -149,6 +149,10 @@ const sendBookingStatusEmail = async ({ toEmail, toName, status, serviceName, bo
             <tr>
               <td style="background:#ffffff;padding:0 36px 28px;text-align:center;color:#8a8a8a;font-size:12px;">
                 ${cfg.note}
+                ${(status === 'cancelled' && statusReason) ? `
+                <div style="margin-top:10px;padding:10px 14px;background:#fbeaec;border-radius:4px;color:#7a2e3b;font-size:12px;">
+                  <strong>Reason:</strong> ${statusReason}
+                </div>` : ''}
               </td>
             </tr>
             <tr>

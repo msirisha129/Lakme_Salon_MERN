@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Calendar, Star, Award, ArrowRight, X } from 'lucide-react';
 import API from '../utils/api';
 import { useAuth } from '../context/AuthContext';
@@ -19,10 +19,25 @@ export default function Dashboard() {
   const [feedbackModal, setFeedbackModal] = useState(null);
   const [feedback, setFeedback] = useState({ rating: 5, comment: '' });
   const [tab, setTab] = useState('upcoming');
+  const location = useLocation();
+  const navigate = useNavigate();
 
   useEffect(() => {
     API.get('/bookings/my').then(r => { setBookings(r.data.data || []); setLoading(false); }).catch(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const rateId = params.get('rate');
+    if (rateId && bookings.length > 0) {
+      const booking = bookings.find(b => b._id === rateId);
+      if (booking) {
+        setFeedbackModal(booking);
+        setFeedback({ rating: 5, comment: '' });
+        navigate('/dashboard', { replace: true });
+      }
+    }
+  }, [location.search, bookings]);
 
   const cancel = async (id) => {
     if (!window.confirm('Cancel this appointment?')) return;
