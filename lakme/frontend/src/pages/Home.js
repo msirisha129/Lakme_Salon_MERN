@@ -301,6 +301,8 @@ export default function Home({ onOpenChat }) {
         </div>
       </section>
 
+      <AIAssistantSection onOpenChat={onOpenChat} />
+
       {/* ── AI HAIRSTYLE BANNER — PREMIUM ───────────────────────────────── */}
       <section style={{ position: 'relative', overflow: 'hidden', background: '#080808', minHeight: 620, display: 'flex', alignItems: 'center' }}>
         {/* Full bleed bg texture */}
@@ -402,8 +404,6 @@ export default function Home({ onOpenChat }) {
           }
         `}</style>
       </section>
-
-      <AIAssistantSection onOpenChat={onOpenChat} />
 
       {/* ── TESTIMONIALS (YOUR VERSION — UNTOUCHED) ─────────────────────── */}
       <section className="section" style={{ background: 'var(--cream)' }}>
