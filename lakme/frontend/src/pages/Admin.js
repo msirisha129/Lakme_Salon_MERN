@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BarChart2, Users, Calendar, DollarSign, Edit2, Trash2, Plus, X, Check } from 'lucide-react';
+import { BarChart2, Users, Calendar, Edit2, Trash2, Plus, X, Check } from 'lucide-react';
 import API from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -213,7 +213,7 @@ const downloadLogs = (type) => {
     { label: 'Total Bookings', val: stats.totalBookings || 0, icon: <Calendar size={20} />, color: '#4A90D9' },
     { label: 'Confirmed', val: stats.confirmedBookings || 0, icon: <Check size={20} />, color: '#0F9B58' },
     { label: 'Total Clients', val: stats.totalUsers || 0, icon: <Users size={20} />, color: '#8B5CF6' },
-    { label: 'Revenue', val: `₹${(stats.totalRevenue || 0).toLocaleString()}`, icon: <DollarSign size={20} />, color: 'var(--gold)' },
+    { label: 'Revenue', val: `₹${(stats.totalRevenue || 0).toLocaleString()}`, icon: <span style={{ fontSize: 22, fontWeight: 600 }}>₹</span>, color: 'var(--gold)' },
   ];
 
   const STATUS_OPTS = ['pending', 'confirmed', 'completed', 'cancelled'];

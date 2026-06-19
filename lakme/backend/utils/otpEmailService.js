@@ -36,7 +36,7 @@ const sendOtpEmail = async ({ toEmail, toName, otp }) => {
   }
 };
 
-const sendBookingStatusEmail = async ({ toEmail, toName, status, serviceName, bookingDate, bookingTime, amount, bookingId }) => {
+const sendBookingStatusEmail = async ({ toEmail, toName, status, serviceName, bookingDate, bookingTime, amount, bookingId, serviceId }) => {
   const statusConfig = {
     confirmed: {
       bannerBg: '#C9A84C',
@@ -78,6 +78,8 @@ const sendBookingStatusEmail = async ({ toEmail, toName, status, serviceName, bo
     const buttonUrl = (status === 'completed' || status === 'cancelled')
       ? `${process.env.FRONTEND_URL || ''}/booking`
       : `${process.env.FRONTEND_URL || ''}/dashboard`;
+
+    const reviewUrl = `${process.env.FRONTEND_URL || ''}/review/${bookingId}`;
 
     const response = await fetch('https://api.brevo.com/v3/smtp/email', {
       method: 'POST',
@@ -137,6 +139,11 @@ const sendBookingStatusEmail = async ({ toEmail, toName, status, serviceName, bo
                 <a href="${buttonUrl}" style="display:inline-block;background:#c9a84c;color:#1a1612;text-decoration:none;font-size:13px;font-weight:bold;letter-spacing:1px;padding:14px 32px;border-radius:3px;">
                   ${cfg.buttonLabel}
                 </a>
+                ${status === 'completed' ? `
+                <br/>
+                <a href="${reviewUrl}" style="display:inline-block;margin-top:12px;background:transparent;color:#b8902f;text-decoration:none;font-size:13px;font-weight:bold;letter-spacing:1px;padding:12px 32px;border:1px solid #c9a84c;border-radius:3px;">
+                  ★ RATE YOUR EXPERIENCE
+                </a>` : ''}
               </td>
             </tr>
             <tr>
