@@ -26,6 +26,8 @@ export default function Admin() {
   const [voiceRows, setVoiceRows] = useState([]);
   const [logs, setLogs] = useState([]);
   const [logsLoading, setLogsLoading] = useState(false);
+  const [reasonModal, setReasonModal] = useState(null); // { id, status } or null
+  const [statusReason, setStatusReason] = useState('');
   useEffect(() => {
     if (!user || user.role !== 'admin') { navigate('/'); return; }
     if (tab === 'Billing') { navigate('/admin/billing'); return; }
@@ -45,12 +47,17 @@ export default function Admin() {
     try { loadLogs('booking'); } catch (e) { /* ignore */ }
   };
 
-  const updateBookingStatus = async (id, status) => {
-    const reason = window.prompt(`Reason for changing status to "${status}" (optional):`, '');
-    if (reason === null) return; // admin clicked cancel on the prompt
-    await API.put(`/bookings/${id}/status`, { status, statusReason: reason });
-    setBookings(b => b.map(x => x._id === id ? { ...x, status, statusReason: reason } : x));
+  const updateBookingStatus = (id, status) => {
+    setReasonModal({ id, status });
+    setStatusReason('');
+  };
+
+  const confirmStatusChange = async () => {
+    const { id, status } = reasonModal;
+    await API.put(`/bookings/${id}/status`, { status, statusReason });
+    setBookings(b => b.map(x => x._id === id ? { ...x, status, statusReason } : x));
     toast.success('Status updated');
+    setReasonModal(null);
   };
 
   const saveService = async () => {
@@ -607,5 +614,34 @@ const downloadLogs = (type) => {
         )}
       </div>
     </div>
-  );
+      {reasonModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ background: 'white', borderRadius: 16, padding: '32px', width: '100%', maxWidth: 420 }}>
+            <h4 style={{ fontFamily: 'var(--font-display)', marginBottom: 8 }}>
+              Change status to "{reasonModal.status}"
+            </h4>
+            <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
+              Add a reason (optional). This will be shown to the customer if cancelled.
+            </p>
+            <textarea
+              className="form-input"
+              rows={3}
+              placeholder="e.g. Stylist unavailable"
+              value={statusReason}
+              onChange={e => setStatusReason(e.target.value)}
+              style={{ resize: 'none', marginBottom: 20 }}
+              autoFocus
+            />
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button onClick={() => setReasonModal(null)} className="btn-outline" style={{ fontSize: 12 }}>
+                Cancel
+              </button>
+              <button onClick={confirmStatusChange} className="btn-primary" style={{ fontSize: 12 }}>
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    );
 }

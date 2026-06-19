@@ -107,6 +107,11 @@ const sendBookingStatusEmail = async ({ toEmail, toName, status, serviceName, bo
               <td style="background:#ffffff;padding:30px 36px 10px;">
                 <div style="color:#8a8a8a;font-size:13px;">Thank you, ${toName}</div>
                 <div style="color:#1a1612;font-size:20px;margin-top:4px;">${cfg.heading}</div>
+                ${(status === 'cancelled' && statusReason) ? `
+                <div style="margin-top:14px;padding:12px 16px;background:#f7f1e3;border-left:3px solid #b23a48;border-radius:2px;">
+                  <div style="color:#b23a48;font-size:10px;letter-spacing:1px;font-weight:bold;">REASON FOR CANCELLATION</div>
+                  <div style="color:#1a1612;font-size:13px;margin-top:4px;">${statusReason}</div>
+                </div>` : ''}
               </td>
             </tr>
             <tr>
@@ -149,10 +154,6 @@ const sendBookingStatusEmail = async ({ toEmail, toName, status, serviceName, bo
             <tr>
               <td style="background:#ffffff;padding:0 36px 28px;text-align:center;color:#8a8a8a;font-size:12px;">
                 ${cfg.note}
-                ${(status === 'cancelled' && statusReason) ? `
-                <div style="margin-top:10px;padding:10px 14px;background:#fbeaec;border-radius:4px;color:#7a2e3b;font-size:12px;">
-                  <strong>Reason:</strong> ${statusReason}
-                </div>` : ''}
               </td>
             </tr>
             <tr>
