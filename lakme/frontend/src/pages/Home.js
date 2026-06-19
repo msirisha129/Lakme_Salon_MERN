@@ -403,6 +403,8 @@ export default function Home({ onOpenChat }) {
         `}</style>
       </section>
 
+      <AIAssistantSection onOpenChat={onOpenChat} />
+
       {/* ── TESTIMONIALS (YOUR VERSION — UNTOUCHED) ─────────────────────── */}
       <section className="section" style={{ background: 'var(--cream)' }}>
         <div className="container">
@@ -454,8 +456,7 @@ export default function Home({ onOpenChat }) {
             ))}
           </div>
         </div>
-      </section>      {/* ── AI ASSISTANT SECTION ── */}
-<AIAssistantSection onOpenChat={onOpenChat} />
+        </section>
       {/* ── CTA (YOUR VERSION — UNTOUCHED) ──────────────────────────────── */}
       <section style={{ background: 'var(--black)', padding: '80px 0', textAlign: 'center' }}>
         <div className="container">
