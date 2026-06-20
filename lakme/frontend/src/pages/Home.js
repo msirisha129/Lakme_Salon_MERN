@@ -213,6 +213,8 @@ export default function Home({ onOpenChat }) {
         </div>
       </section>
 
+      <AIAssistantSection onOpenChat={onOpenChat} />
+
       {/* ── POPULAR SERVICES — FIXED with real images ───────────────────── */}
       <section className="section" style={{ background: 'white' }}>
         <div className="container">
@@ -300,8 +302,6 @@ export default function Home({ onOpenChat }) {
           </div>
         </div>
       </section>
-
-      <AIAssistantSection onOpenChat={onOpenChat} />
 
       {/* ── AI HAIRSTYLE BANNER — PREMIUM ───────────────────────────────── */}
       <section style={{ position: 'relative', overflow: 'hidden', background: '#080808', minHeight: 620, display: 'flex', alignItems: 'center' }}>
