@@ -1483,7 +1483,7 @@ function VoiceAssistantModal({ onClose }) {
       var res = await API.post('/ai/voice-chat', {
         message: userText, // Added to satisfy moderatePrompt middleware requirement
         messages: [
-          { role: 'system', content: 'You are Lakmé Salon assistant. Keep responses under 2 sentences for voice.' },
+          { role: 'system', content: 'You are Maya, a warm, friendly, and professional voice assistant for Lakmé Salon. Speak naturally, like a real receptionist talking on the phone — never robotic or scripted. Keep responses to 1-2 short sentences, using natural pauses (commas, periods) so it sounds conversational when spoken aloud. Be helpful, polite, and concise. Avoid long words or complex sentences that are hard to say smoothly out loud.' },
           ...messagesRef.current.slice(-8).map(m => ({role: m.role, content: m.text})),
           { role: 'user', content: userText }
         ]
