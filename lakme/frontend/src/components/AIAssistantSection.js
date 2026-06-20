@@ -63,18 +63,45 @@ function VoiceAssistantModal({ onClose }) {
 
   React.useEffect(() => {
     // populate voices and speak greeting once voices are ready
-    function initVoices() {
+    function getBestVoice() {
       const synth = window.speechSynthesis;
-      if (!synth) return;
-      console.log('Initializing voices...');
+      if (!synth) return null;
       const v = synth.getVoices() || [];
       voicesRef.current = v;
-      // pick a preferred female-ish English voice if available
-      const cachedName = localStorage.getItem('lakme_selected_tts_voice');
-      let chosen = null;
-      if (cachedName) chosen = v.find(voice => voice.name === cachedName);
-      if (!chosen) chosen = v.find(voice => voice.lang && voice.lang.startsWith('en') && /female|samantha|zira|victoria|moira/i.test(voice.name));
-      chosen = chosen || (v.length > 0 ? v[0] : null);
+
+      // priority list
+      const priority = [
+        "Microsoft Neerja Online (Natural)",
+        "Microsoft Heera - English (India)",
+        "Google UK English Female",
+        "Microsoft Aria Online (Natural)",
+        "Samantha",
+        "Google US English"
+      ];
+
+      // 1) exact name priority
+      for (const name of priority) {
+        const m = v.find(voice => voice.name === name);
+        if (m) return m;
+      }
+
+      // 2) fallback: contains online|natural|neural (case-insensitive) and english lang
+      const smart = v.find(voice => {
+        const n = (voice.name || '').toLowerCase();
+        return (/online|natural|neural/i.test(n) && voice.lang && voice.lang.toLowerCase().startsWith('en'));
+      });
+      if (smart) return smart;
+
+      // 3) any English voice with "female" in the name
+      const female = v.find(voice => (voice.name || '').toLowerCase().includes('female') && voice.lang && voice.lang.toLowerCase().startsWith('en'));
+      if (female) return female;
+
+      // 4) fallback to first available voice
+      return v.length > 0 ? v[0] : null;
+    }
+
+    function initVoices() {
+      const chosen = getBestVoice();
       selectedVoiceRef.current = chosen;
       if (chosen) localStorage.setItem('lakme_selected_tts_voice', chosen.name);
     }
@@ -361,18 +388,15 @@ function VoiceAssistantModal({ onClose }) {
     
     var cleanText = text.replace(/[*_#`\[\]()]/g,'').slice(0,500);
     var utt = new SpeechSynthesisUtterance(cleanText);
-    utt.rate = 0.92;
-    utt.pitch = 1.05;
+    utt.rate = 0.95;
+    utt.pitch = 1.0;
     utt.volume = 1;
-    // prefer a cached selected voice so voice stays consistent
-    const cached = selectedVoiceRef.current;
-    if (cached) utt.voice = cached;
-    else {
-      const voices = synth.getVoices() || [];
-      const femaleVoice = voices.find(v => v.lang && v.lang.startsWith('en') && /female|samantha|zira|victoria|moira/i.test(v.name));
-      utt.voice = femaleVoice || (voices.length > 0 ? voices[0] : null);
-      selectedVoiceRef.current = utt.voice;
-    }
+    // choose the best available voice consistently
+    try {
+      const best = selectedVoiceRef.current || getBestVoice();
+      if (best) utt.voice = best;
+      selectedVoiceRef.current = utt.voice || selectedVoiceRef.current;
+    } catch (e) { /* keep existing behavior if voice selection fails */ }
     
     utt.onend = () => {
       console.log('Playing audio complete. Continuing conversation.');
@@ -564,28 +588,16 @@ function VoiceAssistantModal({ onClose }) {
     
     var cleanText = text.replace(/[*_#`\[\]()]/g,'').slice(0,500);
     var utt = new SpeechSynthesisUtterance(cleanText);
-    
-    // ── Adjust speaking rate based on text length ──
-    // Shorter text: speak slower, longer text: speak faster
-    if (text.length < 50) {
-      utt.rate = 0.85; // Slower for short messages
-    } else if (text.length > 200) {
-      utt.rate = 1.1; // Faster for long messages
-    } else {
-      utt.rate = 0.92; // Normal
-    }
-    
-    utt.pitch = 1.05; // Slightly higher for warmth
+    // unified rate/pitch/volume
+    utt.rate = 0.95;
+    utt.pitch = 1.0;
     utt.volume = 1;
-    
-    const cached = selectedVoiceRef.current;
-    if (cached) utt.voice = cached;
-    else {
-      const voices = synth.getVoices() || [];
-      const femaleVoice = voices.find(v => v.lang && v.lang.startsWith('en') && /female|samantha|zira|victoria|moira/i.test(v.name));
-      utt.voice = femaleVoice || (voices.length > 0 ? voices[0] : null);
-      selectedVoiceRef.current = utt.voice;
-    }
+    // keep consistent voice selection
+    try {
+      const best = selectedVoiceRef.current || getBestVoice();
+      if (best) utt.voice = best;
+      selectedVoiceRef.current = utt.voice || selectedVoiceRef.current;
+    } catch (e) { /* ignore voice selection errors */ }
     
     utt.onend = () => {
       setPhase('idle');
